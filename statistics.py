@@ -3,21 +3,25 @@
 Created on Fri Sep 30 09:07:52 2016
 
 @author: q2git
+
+# reading stock data from database and analysising it
 """
 
 import pandas as pd
 import sqlite3
 
 
-def read_hists_by_year(year):
-    db = '{}.db'.format(year)
-    sql = 'select * from hists_{}'.format(year)    
+def db_to_df(year, ktype, table='stocks'):
+    ''' reading data from db and return DataFrame object '''
+    db = '{}_{}.db'.format(year, ktype)
+    sql = 'select * from {}'.format(table)  #stocks or indexs 
     con = sqlite3.connect(db)
     #con.text_factory = str  
     print 'reading data from [{}] ...'.format(db.upper()),
     df = pd.read_sql(sql, con)
     print 'Done.'
     return df
+
     
 def data_stat(df):
     df['total'] = 1
@@ -40,6 +44,6 @@ def data_stat(df):
     return stat
 
 if __name__ == '__main__':
-    df = read_hists_by_year(2016)
+    df = db_to_df(2016,'D')
     stat = data_stat(df)
     print stat
