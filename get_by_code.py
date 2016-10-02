@@ -17,22 +17,47 @@ DATA_FOLDER = 'data'
 
 
 def get_codes():
-    codes = ts.get_stock_basics().index.tolist() #stock codes 
-    return codes
+    ''' get all stock codes '''
+    return ts.get_stock_basics().index.tolist() #stock codes 
+
 
     
-def gen_daterange(start):
+def get_today():
+    ''' get today's data '''
+    print '*'*20,'DAILY TRAING DATA','*'*20
+    
+    fn = os.path.join(DATA_FOLDER,'daily','{}.csv'.format(datetime.date.today()))
+    print 'writting trading data to [{}] ... '.format(fn)
+    df = ts.get_today_all() #ts.get_stock_basics()
+    df.to_csv(fn, encoding='gbk', ) 
+    print 'done.'
+    
+    
+def gen_bdays():
+    ''' generate bussiness date range '''   
+    start = str(raw_input('Start Day: '))
+    end = str(raw_input('End Day: '))
+    
+    today = pd.to_datetime(datetime.date.today())
     if not start:
-        today = pd.to_datetime(datetime.date.today())
-        start = today - pd.Timedelta(days=30)
-    #bdays = pd.bdate_range(start='2016-09-01', end='2016-10-01') #working days    
-    bdays = pd.period_range(start=start, periods=20, freq='B')
+        if not end:
+            end = today
+        start = pd.to_datetime(end) - pd.Timedelta(days=30)                                 
+    else:
+        if not end:
+            end = pd.to_datetime(start) + pd.Timedelta(days=30)
+ 
+    #bdays = pd.bdate_range(start='2016-09-01', periods=20,) #working days    
+    bdays = pd.period_range(start=start, end=end, freq='B')
     return bdays
  
     
-def get_tick(code, start=None):
-    bdays = gen_daterange(start)
-    fn = os.path.join(DATA_FOLDER,'{}_tick_{}.csv'.format(code,start))
+def get_tick(code):
+    ''' get tick data '''
+    print '*'*20,'TICK DATA (DEFAULT:30days)','*'*20
+        
+    bdays = gen_bdays()
+    fn = os.path.join(DATA_FOLDER,'{}_tick_{}.csv'.format(code,bdays[0]))
 
     data = []
     print 'writting tick data to [{}]... '.format(fn)
@@ -52,7 +77,11 @@ def get_tick(code, start=None):
     
     
 def get_kdata(code): 
-    fn  = os.path.join(DATA_FOLDER,'{}_kdata.xlsx'.format(code))    
+    ''' get k data '''
+    print '*'*20,'K DATA (D,W,...,5)','*'*20
+    
+    fn  = os.path.join(DATA_FOLDER,'{}_kdata.xlsx'.format(code))   
+    
     with pd.ExcelWriter(fn) as writer:
         for ktype in ['D','W','M','5','15','30','60']:
             print 'writting [{}] to [{}]... '.format(ktype,fn),
@@ -63,14 +92,13 @@ def get_kdata(code):
             
             
 def main():
+    get_today()
+    
     code = str(raw_input('Stock Code: '))
-    start = str(raw_input('Start Day: '))
     
     if code in get_codes():
-        print '*'*20,'GET K DATA','*'*20
         get_kdata(code)
-        print '*'*20,'GET TICK DATA','*'*20
-        get_tick(code,start)
+        get_tick(code)
     else:
         print 'wrong code.'
     

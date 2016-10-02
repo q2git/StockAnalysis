@@ -14,7 +14,7 @@ import Queue
 import time
 import os
 
-DATA_FOLDER = 'data'
+DATA_FOLDER = r'data\db'
 # k line type         
 global KTYPE, DB_PATH
 
@@ -79,7 +79,7 @@ def write_hist_data(year, q_data, lock):
             table = 'stocks' if code.isdigit() else 'indexs'
             df.to_sql(table, conn, if_exists='append')  
             with lock:
-                print 'Writer   : [{}], left: {}'.format(code, q_data.qsize())
+                print 'Writer   : [{}] to [{}], left: {}'.format(code, DB_PATH, q_data.qsize())
         else:
             break
     print 'Writer has stopped.'
@@ -87,13 +87,14 @@ def write_hist_data(year, q_data, lock):
             
 def get_all():
     ''' get history data for alll stocks and write it into database '''
+    
     year = raw_input('Year or all: ')
     if not(year.isdigit()) and not(year=='all'): 
         print 'Wrong input.'
         return
     
     global KTYPE, DB_PATH
-    ktype = str(raw_input('Ktype=D (W,M,5,15,30,60): '))
+    ktype = str(raw_input('Ktype=D (W,M,5,15,30,60): ')).upper()
     if ktype in ['W','M','5','15','30','60']:
         KTYPE = ktype
     else:
