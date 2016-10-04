@@ -4,7 +4,7 @@ Created on Sun Oct 02 11:23:54 2016
 
 @author: q2git
 
-# fetching stock data by code from internet and storing it into database
+# get stock data by code and storing it into database
 """
 
 import tushare as ts
@@ -13,24 +13,13 @@ import datetime
 import os
 
 
-DATA_FOLDER = 'data'
-
+DATA_FOLDER = r'data\code'
+if not os.path.exists(DATA_FOLDER):
+    os.mkdir(DATA_FOLDER)
 
 def get_codes():
     ''' get all stock codes '''
     return ts.get_stock_basics().index.tolist() #stock codes 
-
-
-    
-def get_today():
-    ''' get today's data '''
-    print '*'*20,'DAILY TRAING DATA','*'*20
-    
-    fn = os.path.join(DATA_FOLDER,'daily','{}.csv'.format(datetime.date.today()))
-    print 'writting trading data to [{}] ... '.format(fn)
-    df = ts.get_today_all() #ts.get_stock_basics()
-    df.to_csv(fn, encoding='gbk', ) 
-    print 'done.'
     
     
 def gen_bdays():
@@ -92,7 +81,6 @@ def get_kdata(code):
             
             
 def main():
-    get_today()
     
     code = str(raw_input('Stock Code: '))
     

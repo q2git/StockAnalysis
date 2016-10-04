@@ -4,7 +4,7 @@ Created on Thu Sep 29 18:51:16 2016
 
 @author: q2git
 
-# get all stocks data from internet and store it into database
+# get all stocks data and store it into database
 """
 
 import tushare as ts
@@ -14,9 +14,13 @@ import Queue
 import time
 import os
 
-DATA_FOLDER = r'data\db'
+
+DATA_FOLDER = r'data\all'
+if not os.path.exists(DATA_FOLDER):
+    os.mkdir(DATA_FOLDER)
 # k line type         
 global KTYPE, DB_PATH
+
 
 def code_to_que(q_code):
     ''' put code into queue '''
@@ -26,7 +30,7 @@ def code_to_que(q_code):
     q_code.put(None) #end tag
     
 
-def fetch_hist_data(th, year, q_code, q_data, lock): 
+def get_data(th, year, q_code, q_data, lock): 
     ''' get data and put it into queue, ktype=D '''
     global KTYPE
     
@@ -65,13 +69,12 @@ def fetch_hist_data(th, year, q_code, q_data, lock):
     print 'Fetcher-{} has stopped.'.format(th)
  
  
-def write_hist_data(year, q_data, lock):
+def write_data(year, q_data, lock):
     ''' write data to database '''
     global KTYPE, DB_PATH
-    
+    print 'Writer has started...'    
     conn = sqlite3.connect(DB_PATH)
     conn.text_factory = str     
-    print 'Writer has started...'
     while 1:
         data = q_data.get()
         if data:
@@ -82,10 +85,11 @@ def write_hist_data(year, q_data, lock):
                 print 'Writer   : [{}] to [{}], left: {}'.format(code, DB_PATH, q_data.qsize())
         else:
             break
+   
     print 'Writer has stopped.'
 
             
-def get_all():
+def main():
     ''' get history data for alll stocks and write it into database '''
     
     year = raw_input('Year or all: ')
@@ -112,12 +116,12 @@ def get_all():
     #fetch threads
     th_r = []
     for x in xrange(5):
-        th = threading.Thread(target=fetch_hist_data, 
+        th = threading.Thread(target=get_data, 
                             args=(x, year, q_code, q_data, lock))        
         th.start()
         th_r.append(th)
     #write thread                                                 
-    th_w = threading.Thread(target=write_hist_data, args=(year, q_data, lock))
+    th_w = threading.Thread(target=write_data, args=(year, q_data, lock))
     th_w.start() 
     
     for th in th_r:
@@ -126,6 +130,5 @@ def get_all():
     print 'All tasks have completed!'
     
 if __name__ == '__main__':
-    #hists(2015)
-    get_all()
+    main()
     raw_input('END.') #press any key to exit
