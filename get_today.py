@@ -22,10 +22,13 @@ def get_today():
     ''' get today's data '''
     print '*'*20,'DAILY TRAING DATA','*'*20
     
-    fn = os.path.join(DATA_FOLDER, '{}.csv'.format(datetime.date.today()))
+    fn = os.path.join(DATA_FOLDER, '{}.xlsx'.format(datetime.date.today()))
     print 'writting trading data to [{}] ... '.format(fn)
     df = ts.get_today_all() #ts.get_stock_basics()
-    df.to_csv(fn, encoding='gbk', ) 
+    df = df.set_index('code')
+    #df.name = df.name.apply(lambda x: x.decode('gbk'))
+    #df.to_csv(fn, encoding='gbk', )
+    df.to_excel(fn)
     print 'done.'
 
     
