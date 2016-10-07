@@ -39,10 +39,12 @@ def stat_indexs(df):
     
 def stat_stocks(df):
     df['ZS'] = 1
-    df['ZT'] = df.p_change>=9.9 
-    df['DT'] = df.p_change<=-9.9  
-    df['Z5'] = df.p_change>=5
-    df['D5'] = df.p_change<=-5      
+    #df['ZT'] = df.p_change>=9.9 
+    #df['DT'] = df.p_change<=-9.9  
+    df['SZ5'] = df.p_change>=5
+    df['XD5'] = df.p_change<=-5 
+    df['SZ'] = df.p_change>=0.01 
+    df['XD'] = df.p_change<=-0.01     
     #df['c5'] = df.close>=df.ma5
     #df['c10'] = df.close>=df.ma10
     #df['spjdy20'] = df.close>=df.ma20
@@ -50,7 +52,7 @@ def stat_stocks(df):
     #df['v10'] = df.volume>=df.v_ma10
     #df['cjldy20'] = df.volume>=df.v_ma20   
     stat = pd.pivot_table(df, 
-                          values=['ZS','ZT','DT','Z5','D5',],
+                          values=['ZS','SZ5','XD5','SZ','XD',],
                           index=['date'], aggfunc='sum',
                           )
     return stat
@@ -73,8 +75,8 @@ def plot(df):
     df.D5.plot(kind='line', color='green', ax=ax2, )
     df.IDX_SH.plot(kind='line', color='blue', ax=ax3, ) 
 
-    ax1.set_ylabel('Z5', color='red')
-    ax2.set_ylabel('D5', color='green') 
+    ax1.set_ylabel('SZ', color='red')
+    ax2.set_ylabel('XD', color='green') 
     ax3.set_ylabel('IDX_SH', color='blue')  
     
     plt.show()   
@@ -82,7 +84,7 @@ def plot(df):
     
 def main():
     year = raw_input('Year or all: ')
-    fn = os.path.join(STAT_FOLDER, 'stat_{}.xlsx'.format(year))  
+    fn = os.path.join(STAT_FOLDER, 'stat_day_{}.xlsx'.format(year))  
     
     s1 = stat_indexs(db_to_df(year, table='indexs'))
     s2 = stat_stocks(db_to_df(year))
