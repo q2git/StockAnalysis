@@ -9,6 +9,7 @@ Created on Fri Sep 30 09:07:52 2016
 
 import matplotlib.pyplot as plt
 import pandas as pd
+import numpy as np
 import sqlite3
 import os
 
@@ -36,7 +37,7 @@ def stat_indexs(df):
     stat = df.groupby(['code','date']).mean() #.ix['sh'] #shanghai index
     return stat
 
-    
+ 
 def stat_stocks(df):
     df['ZS'] = 1
     #df['ZT'] = df.p_change>=9.9 
@@ -80,24 +81,36 @@ def plot(df):
     ax3.set_ylabel('IDX_SH', color='blue')  
     
     plt.show()   
+
+    
+
+def fun1(s):
+    zt = np.where(s.p_change>=9.9, 1, 0).sum()
+    over_ma20 = np.where(s.close>=s.ma20, 1, 0).sum()
+    return pd.Series([zt, over_ma20], index=['zt', 'over_ma20'])
     
     
 def main():
     year = raw_input('Year or all: ')
     fn = os.path.join(STAT_FOLDER, 'stat_day_{}.xlsx'.format(year))  
     
-    s1 = stat_indexs(db_to_df(year, table='indexs'))
-    s2 = stat_stocks(db_to_df(year))
-
-    for idx in set(s1.index.get_level_values(0)):
-        s2['IDX_{}'.format(idx.upper())] = s1.ix[idx].close
+    df1 = stat_indexs(db_to_df(year, table='indexs'))
+    df2 = db_to_df(year)
+    gb = df2.groupby('date')
+    
+    df = gb.apply(fun1)
+    
+    for idx in set(df1.index.get_level_values(0)):
+        df['id_{}'.format(idx.lower())] = df1.ix[idx].close
             
     with pd.ExcelWriter(fn) as writer:
-        s2.to_excel(writer, sheet_name='Main')              
+        df.to_excel(writer)              
     
-    return s2
-    
+    return df
+  
     
 if __name__ == '__main__':
     df = main()
+    df.plot.line(subplots=True)
+    plt.show()
     raw_input('END.') #press any key to exit
