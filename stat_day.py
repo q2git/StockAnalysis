@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Fri Sep 30 09:07:52 2016
-
 @author: q2git
-
 # reading stock data from database and analysising it
 """
 
@@ -85,32 +83,66 @@ def plot(df):
     
 
 def fun1(s):
-    zt = np.where(s.p_change>=9.9, 1, 0).sum()
-    over_ma20 = np.where(s.close>=s.ma20, 1, 0).sum()
-    return pd.Series([zt, over_ma20], index=['zt', 'over_ma20'])
+    avg_price_0 = s.close.mean()  #non-weighted  
+    avg_price_1 = np.multiply(s.close,s.volume).sum()/s.volume.sum() #weighted
+    #avg_price = sum(map(lambda x:x[0]*x[1], zip(s.close,s.volume)))/s.volume.sum()
+    
+    sum_vol = s.volume.sum()
+    
+    rise = np.where(s.p_change>=0.1, 1.0, 0).sum()
+    #fall = np.where(s.p_change<=0.1, 1, 0).sum()
+    #rf_ratio = rise/fall if rise>=fall else -fall/rise 
+    rise_ratio = (rise / s.code.count()) * 100
+     
+    rise_3 = np.where(s.p_change>=5, 1.0, 0).sum()
+    #fall_3 = np.where(s.p_change<=3, 1, 0).sum()
+    #rf_ratio_3 = rise_3/fall_3 if rise_3>=fall_3 else -fall_3/rise_3  
+    rise_ratio_3 = (rise_3 / s.code.count()) * 100   
+     
+    #zt = np.where(s.p_change>=9.9, 1, 0).sum()
+    #dt = np.where(s.p_change<=9.9, 1, 0).sum()
+    crit = (s.close>=s.ma5) & (s.close>=s.ma10) & (s.close>=s.ma20) & (s.close>=s.ma30) & (s.close>=s.ma60)
+    over_ma = (np.where(crit, 1.0, 0).sum() / s.code.count()) * 100
+    
+    return pd.Series([over_ma, avg_price_0, avg_price_1, 
+                      rise_ratio, rise_ratio_3, sum_vol], 
+                     index=['over_ma', 'avg_price_0', 'avg_price_1', 
+                     'rise_ratio', 'rise_ratio_3', 'sum_vol'])
     
     
 def main():
-    year = raw_input('Year or all: ')
-    fn = os.path.join(STAT_FOLDER, 'stat_day_{}.xlsx'.format(year))  
-    
-    df1 = stat_indexs(db_to_df(year, table='indexs'))
-    df2 = db_to_df(year)
-    gb = df2.groupby('date')
-    
-    df = gb.apply(fun1)
-    
-    for idx in set(df1.index.get_level_values(0)):
-        df['id_{}'.format(idx.lower())] = df1.ix[idx].close
-            
-    with pd.ExcelWriter(fn) as writer:
-        df.to_excel(writer)              
-    
+    years = raw_input('Years(eg, 2015.2016) or all: ')
+    fn = os.path.join(STAT_FOLDER, 'stat_day_{}.xlsx'.format(years))     
+    dfs = []
+    for year in years.split('.'):
+        df1 = stat_indexs(db_to_df(year, table='indexs'))
+        df2 = db_to_df(year)
+        df2['ma30']=pd.rolling_mean(df2.close,window=30,min_periods=1)
+        df2['ma60']=pd.rolling_mean(df2.close,window=60,min_periods=1)
+        gb = df2.groupby('date')  
+        df0 = gb.apply(fun1)    
+        #for idx in set(df1.index.get_level_values(0)):
+        #    df['id_{}'.format(idx.lower())] = df1.ix[idx].close
+        df0['idx'] = df1.ix['sh'].close #sh index
+        stk = df2.groupby('code').get_group('600596').set_index('date').close #
+        df0 = pd.concat([df0, stk], axis=1)
+        dfs.append(df0) 
+        
+    df = pd.concat(dfs)
+    w = input('window: ')
+    df['rise_ratio'] = pd.rolling_mean(df.rise_ratio,window=w,min_periods=w)
+    df['sum_vol'] = pd.rolling_mean(df.sum_vol,window=w,min_periods=w) 
+    df['avg_price_1'] = pd.rolling_mean(df.avg_price_1,window=w,min_periods=w)     
+    df['rise_ratio_3'] = pd.rolling_mean(df.rise_ratio_3,window=w,min_periods=w) 
+    df['over_ma'] = pd.rolling_mean(df.over_ma,window=w,min_periods=w)     
+    df.to_excel(fn)                
     return df
   
     
 if __name__ == '__main__':
     df = main()
-    df.plot.line(subplots=True)
+    p = df[['over_ma', 'rise_ratio', 'rise_ratio_3', 'close', 'idx']]
+    p.plot(kind='line', subplots=True, legend=True)
     plt.show()
+   
     raw_input('END.') #press any key to exit
