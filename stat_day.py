@@ -83,31 +83,29 @@ def plot(df):
     
 
 def fun1(s):
-    avg_price_0 = s.close.mean()  #non-weighted  
-    avg_price_1 = np.multiply(s.close,s.volume).sum()/s.volume.sum() #weighted
+    #avg_close = s.close.mean()  #non-weighted  
+    avg_close = np.multiply(s.close,s.volume).sum()/s.volume.sum() #weighted
     #avg_price = sum(map(lambda x:x[0]*x[1], zip(s.close,s.volume)))/s.volume.sum()
     
-    sum_vol = s.volume.sum()
+    #sum_vol = s.volume.sum()
     
     rise = np.where(s.p_change>=0.1, 1.0, 0).sum()
-    #fall = np.where(s.p_change<=0.1, 1, 0).sum()
+    #fall = np.where(s.p_change<=-0.1, 1.0, 0).sum()
     #rf_ratio = rise/fall if rise>=fall else -fall/rise 
-    rise_ratio = (rise / s.code.count()) * 100
+    rise0 = ((rise) / s.code.count()) * 100
      
-    rise_3 = np.where(s.p_change>=5, 1.0, 0).sum()
-    #fall_3 = np.where(s.p_change<=3, 1, 0).sum()
+    rise_3 = np.where(s.p_change>=3, 1.0, 0).sum()
+    #fall_3 = np.where(s.p_change<=-3, 1.0, 0).sum()
     #rf_ratio_3 = rise_3/fall_3 if rise_3>=fall_3 else -fall_3/rise_3  
-    rise_ratio_3 = (rise_3 / s.code.count()) * 100   
+    rise3 = ((rise_3) / s.code.count()) * 100   
      
     #zt = np.where(s.p_change>=9.9, 1, 0).sum()
     #dt = np.where(s.p_change<=9.9, 1, 0).sum()
-    crit = (s.close>=s.ma5) & (s.close>=s.ma10) & (s.close>=s.ma20) & (s.close>=s.ma30) & (s.close>=s.ma60)
+    crit = (s.close>=s.ma20) & (s.ma20>=s.ma30) & (s.ma30>=s.ma60)
     over_ma = (np.where(crit, 1.0, 0).sum() / s.code.count()) * 100
     
-    return pd.Series([over_ma, avg_price_0, avg_price_1, 
-                      rise_ratio, rise_ratio_3, sum_vol], 
-                     index=['over_ma', 'avg_price_0', 'avg_price_1', 
-                     'rise_ratio', 'rise_ratio_3', 'sum_vol'])
+    return pd.Series([over_ma, avg_close, rise0, rise3, ], 
+                     index=['over_ma', 'avg_close', 'rise0', 'rise3', ])
     
     
 def main():
@@ -117,8 +115,8 @@ def main():
     for year in years.split('.'):
         df1 = stat_indexs(db_to_df(year, table='indexs'))
         df2 = db_to_df(year)
-        df2['ma30']=pd.rolling_mean(df2.close,window=30,min_periods=1)
-        df2['ma60']=pd.rolling_mean(df2.close,window=60,min_periods=1)
+        df2['ma30']=pd.rolling_mean(df2.close,window=30,)
+        df2['ma60']=pd.rolling_mean(df2.close,window=60,)
         gb = df2.groupby('date')  
         df0 = gb.apply(fun1)    
         #for idx in set(df1.index.get_level_values(0)):
@@ -129,20 +127,23 @@ def main():
         dfs.append(df0) 
         
     df = pd.concat(dfs)
-    w = input('window: ')
-    df['rise_ratio'] = pd.rolling_mean(df.rise_ratio,window=w,min_periods=w)
-    df['sum_vol'] = pd.rolling_mean(df.sum_vol,window=w,min_periods=w) 
-    df['avg_price_1'] = pd.rolling_mean(df.avg_price_1,window=w,min_periods=w)     
-    df['rise_ratio_3'] = pd.rolling_mean(df.rise_ratio_3,window=w,min_periods=w) 
-    df['over_ma'] = pd.rolling_mean(df.over_ma,window=w,min_periods=w)     
+    w = 10 #input('window: ')
+    df['rise3'] = pd.rolling_mean(df.rise3,window=w,)
+    #df['avg_close'] = pd.rolling_mean(df.avg_close,window=w,)     
+    df['rise0'] = pd.rolling_mean(df.rise0,window=w,) 
+    #df['over_ma'] = pd.rolling_mean(df.over_ma,window=w,)     
     df.to_excel(fn)                
     return df
   
     
 if __name__ == '__main__':
     df = main()
-    p = df[['over_ma', 'rise_ratio', 'rise_ratio_3', 'close', 'idx']]
-    p.plot(kind='line', subplots=True, legend=True)
+    df = df[['over_ma', 'rise0', 'rise3', 'avg_close', 'idx']]
+    df.plot(kind='line', grid=True, subplots=True, legend=False,
+                 xticks=np.arange(0, len(df), 10))
+
+    [ax.legend(loc='center left', bbox_to_anchor=(1.0, 0.5)) for ax in plt.gcf().axes]
+    #plt.tight_layout()     
     plt.show()
    
     raw_input('END.') #press any key to exit
