@@ -32,7 +32,7 @@ def db_to_df(year, ktype='D', table='stocks'):
 
 
 def stat_indexs(df):
-    stat = df.groupby(['code','date']).mean() #.ix['sh'] #shanghai index
+    stat = df.groupby(['code','date']).max() #.ix['sh'] #shanghai index
     return stat
 
  
@@ -107,12 +107,31 @@ def fun1(s):
     return pd.Series([over_ma, avg_close, rise0, rise3, ], 
                      index=['over_ma', 'avg_close', 'rise0', 'rise3', ])
     
+def add_MAs(dataframe):
+    gb = dataframe.groupby(['code', 'date']).max()
+    codes = gb.index.levels[0]
+    df = pd.DataFrame()
+    
+    for code in codes:
+        t = gb.ix[code]
+        t['ma30'] = pd.rolling_mean(t.close, window=30,)
+        t['ma60'] = pd.rolling_mean(t.close, window=60,)
+        t['code'] = code
+        df = df.append(t)
+    return df    
+
     
 def main():
     years = raw_input('Years(eg, 2015.2016) or all: ')
-    fn = os.path.join(STAT_FOLDER, 'stat_day_{}.xlsx'.format(years))     
-    dfs = []
+    stk = raw_input('Stk code: ')
+    fn = os.path.join(STAT_FOLDER, 'stat_day_{}.xlsx'.format(years))  
+    
+    dfidxs = pd.DataFrame()
+    dfstks = None
     for year in years.split('.'):
+        dfidxs = dfidxs.append(db_to_df(year, table='indexs'))
+        dfstks = dfstks.append(db_to_df(year))
+        '''
         df1 = stat_indexs(db_to_df(year, table='indexs'))
         df2 = db_to_df(year)
         df2['ma30']=pd.rolling_mean(df2.close,window=30,)
@@ -121,25 +140,38 @@ def main():
         df0 = gb.apply(fun1)    
         #for idx in set(df1.index.get_level_values(0)):
         #    df['id_{}'.format(idx.lower())] = df1.ix[idx].close
-        df0['idx'] = df1.ix['sh'].close #sh index
-        stk = df2.groupby('code').get_group('600596').set_index('date').close #
-        df0 = pd.concat([df0, stk], axis=1)
-        dfs.append(df0) 
+        df_idx =  df1.ix['sh',['close']].rename(columns={'close':'idx'})
+        #df0['idx'] = df1.ix['sh'].close #sh index
+        df_stk = df2[df2.code==stk].set_index('date')
+        df_stk = df_stk[['close']].rename(columns={'close':stk})
+
+        df0 = pd.concat([df0, df_stk, df_idx], axis=1, join_axes=[df_idx.index])
         
-    df = pd.concat(dfs)
+        #stk = df2.groupby('code').get_group('600596').set_index('date').close #
+        dfs.append(df0) 
+        '''
+    dfidxs = dfidxs.groupby(['code','date']).max() 
+    dfidx = dfidx.ix['sh',['close']].rename(columns={'close':'idx'})
+    
+    gb = dfstks.groupby('date') #.apply(fun1)
+    gb['ma30'] = pd.rolling_mean(gb.close, window=30,)
+    gb['ma60'] = pd.rolling_mean(gb.close, window=60,)
+
+    
+    #df = pd.concat(dfs)
     w = 10 #input('window: ')
     df['rise3'] = pd.rolling_mean(df.rise3,window=w,)
     #df['avg_close'] = pd.rolling_mean(df.avg_close,window=w,)     
     df['rise0'] = pd.rolling_mean(df.rise0,window=w,) 
     #df['over_ma'] = pd.rolling_mean(df.over_ma,window=w,)     
     df.to_excel(fn)                
-    return df
+    return df[['over_ma', 'rise0', 'rise3', stk, 'idx']]
   
     
 if __name__ == '__main__':
     df = main()
-    df = df[['over_ma', 'rise0', 'rise3', 'avg_close', 'idx']]
-    df.plot(kind='line', grid=True, subplots=True, legend=False,
+
+    df.plot(kind='line', grid=True, subplots=True, legend=False, rot='vertical',
                  xticks=np.arange(0, len(df), 10))
 
     [ax.legend(loc='center left', bbox_to_anchor=(1.0, 0.5)) for ax in plt.gcf().axes]
