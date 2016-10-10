@@ -106,19 +106,20 @@ def fun1(s):
     
     return pd.Series([over_ma, avg_close, rise0, rise3, ], 
                      index=['over_ma', 'avg_close', 'rise0', 'rise3', ])
+
+
     
-def add_MAs(dataframe):
-    gb = dataframe.groupby(['code', 'date']).max()
-    codes = gb.index.levels[0]
-    df = pd.DataFrame()
+def add_MAs(dataframe, *args):
+    ''' add moving average to dataframe '''
+    df = dataframe.set_index('date').sort_index()
     
-    for code in codes:
-        t = gb.ix[code]
-        t['ma30'] = pd.rolling_mean(t.close, window=30,)
-        t['ma60'] = pd.rolling_mean(t.close, window=60,)
-        t['code'] = code
-        df = df.append(t)
-    return df    
+    for day in args:
+        ma = df.groupby('code')['close'].rolling(day).mean()\
+             .reset_index().rename(columns={'close':'ma{}'.format(day)})
+             
+        dataframe = pd.merge(dataframe, ma, on=['code', 'date'])
+    
+    return dataframe    
 
     
 def main():
@@ -127,7 +128,7 @@ def main():
     fn = os.path.join(STAT_FOLDER, 'stat_day_{}.xlsx'.format(years))  
     
     dfidxs = pd.DataFrame()
-    dfstks = None
+    dfstks = pd.DataFrame()
     for year in years.split('.'):
         dfidxs = dfidxs.append(db_to_df(year, table='indexs'))
         dfstks = dfstks.append(db_to_df(year))
@@ -144,18 +145,20 @@ def main():
         #df0['idx'] = df1.ix['sh'].close #sh index
         df_stk = df2[df2.code==stk].set_index('date')
         df_stk = df_stk[['close']].rename(columns={'close':stk})
-
         df0 = pd.concat([df0, df_stk, df_idx], axis=1, join_axes=[df_idx.index])
         
         #stk = df2.groupby('code').get_group('600596').set_index('date').close #
         dfs.append(df0) 
         '''
     dfidxs = dfidxs.groupby(['code','date']).max() 
-    dfidx = dfidx.ix['sh',['close']].rename(columns={'close':'idx'})
+    dfidx = dfidxs.ix['sh',['close']].rename(columns={'close':'idx'})
     
-    gb = dfstks.groupby('date') #.apply(fun1)
-    gb['ma30'] = pd.rolling_mean(gb.close, window=30,)
-    gb['ma60'] = pd.rolling_mean(gb.close, window=60,)
+    dfstks = add_MAs(dfstks, 30, 60)
+    dfstk = dfstks[dfstks['code']==stk].set_index('date')[['close']]\
+            .rename(columns={'close':stk})
+    
+    dfgb = dfstks.groupby('date').apply(fun1)
+    df = pd.concat([dfidx, dfstk, dfgb], axis=1, join_axes=[dfidx.index])
 
     
     #df = pd.concat(dfs)

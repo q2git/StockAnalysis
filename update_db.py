@@ -26,8 +26,8 @@ class Data_Fetcher(threading.Thread):
         self.q_df = q_df
         self.lock = lock
         self.ktype = kwargs.setdefault('ktype', 'D')
-        self.start = kwargs.setdefault('start', None)
-        self.end = kwargs.setdefault('end', None)
+        self.startday = kwargs.setdefault('start', None)
+        self.endday = kwargs.setdefault('end', None)
         self.start()
         
     def run(self):
@@ -42,8 +42,8 @@ class Data_Fetcher(threading.Thread):
                 code = self.q_code.get()
                 if code:
                     try:
-                        df = ts.get_hist_data(code, start=self.start,
-                                              end=self.end,
+                        df = ts.get_hist_data(code, start=self.startday,
+                                              end=self.endday,
                                               ktype=self.ktype,
                                               retry_count=3, pause=3)
                                               
@@ -51,13 +51,14 @@ class Data_Fetcher(threading.Thread):
                         self.q_df.put(df)
                         msg = 'OK'
                     except Exception as e:
-                        msg = 'NG-{}'.format(e.message)
+                        msg = 'NG'
+                        with open('error.txt','a') as f: #error records
+                            f.write('Fetcher:{}, {}\n'.format(code, e))                         
                         
                     with self.lock:
-                        print '{:10}: [{}], left: {:5}, Msg: {}'.format(self.getName(), 
+                        print '{:10}: [{:6}], left: {:4}, Msg: {}'.format(self.getName(), 
                                 code, self.q_code.qsize(), msg)        
-                        with open('error.txt','a') as f: #error records
-                            f.write('{},error: {}\n'.format(code, e))                        
+                       
                         
                 else:
                     self.q_code.put(None) #for other threads to exit
@@ -68,26 +69,42 @@ class Data_Fetcher(threading.Thread):
 
 
  
-def data_writer(conn, q_df, lock):
+def data_writer(db, q_df, lock):
     ''' write data to database ''' 
-    print 'Writer has started...'    
-    while 1:
-        data = q_df.get()
-        if data:
-            code, df = data.code[0], data
-            table = 'stocks' if code.isdigit() else 'indexs'
-            df.to_sql(table, conn, if_exists='append')  
+	#TBD: writer cannot exit
+    print 'Writer has started...' 
+    with sqlite3.connect(db) as conn:
+        conn.text_factory = str
+        while 1:
+            msg = None
+            code = None
+            try:
+                df = q_df.get()
+                if df is None: break
+            
+                code = df.ix[0,'code']
+                table = 'stocks' if code.isdigit() else 'indexs'
+                df.to_sql(table, conn, if_exists='append')  
+                msg = 'OK'
+            except Exception as e:
+                msg = 'NG'
+                with open('error.txt','a') as f: #error records
+                    f.write('Writer:{}, {}\n'.format(code, e))  
+                    
             with lock:
-                print 'Writer : [{}], left: {}'.format(code, q_df.qsize())
-        else:
-            break
+                print '{:10}: [{:6}], left: {:4} ,Msg: {:2}, DB:{}'\
+                        .format('Writer', code, q_df.qsize(), msg, db)            
+            
     print 'Writer has stopped.'
 
 
 
 def get_code_list():
-    codes = ts.get_stock_basics().index.tolist() #stock codes 
+    #codes = ts.get_stock_basics().index.tolist() #stock codes 
+    #codes = ['600596','000009','300331','000001','000002'] 
+    codes = ts.get_today_all().code.tolist()
     codes.extend(['sh','sz','hs300','sz50','zxb','cyb',]) #index codes
+
     return codes
     
 
@@ -99,19 +116,17 @@ def main():
     #if not year.isdigit(): 
     year = TODAY.year
         
-    db = os.path.join(DATA_FOLDER, '{}_{}.db'.format(year, 'D'))  
-    if os.path.isfile(db):
-        print 'The file [{}] has already existed.'.format(db)
-        return   
+    db = os.path.join(DATA_FOLDER, '{}_{}.db'.format(year, 'D'))    
     
-    conn = sqlite3.connect(db)
-    conn.text_factory = str
+    with sqlite3.connect(db) as conn:
+        rs = conn.execute('select date from indexs order by date desc').fetchone()
     
-    lastupdate = conn.execute('select date from indexs order by date desc').fetchone()
-    start = pd.to_datetime(lastupdate) + pd.DateOffset(1) #add 1 day
+    t = pd.to_datetime(rs[0]) + pd.DateOffset(1) #add 1 day
+    start = str(t.date())
     
     print 'Ready to update [{}], start day: [{}]'.format(db, start) 
-    raw_input('Press any key to continue...') 
+    n = raw_input('The number of threads (defalut=5): ') 
+    n = int(n) if n.isdigit() else 5
     
     q_code = Queue.Queue()
     q_df = Queue.Queue()    
@@ -119,13 +134,14 @@ def main():
     
     codes = get_code_list()    
     map(q_code.put, codes) #put stock codes and indexs into queue
+    q_code.put(None) #end tag
 
     #fetch threads
-    for x in xrange(5):
+    for x in xrange(n):
         Data_Fetcher(q_code, q_df, lock, start=start)
         
     #write thread                                                 
-    th_w = threading.Thread(target=data_writer, args=(conn, q_df, lock))
+    th_w = threading.Thread(target=data_writer, args=(db, q_df, lock))
     th_w.start() 
     th_w.join()
     
