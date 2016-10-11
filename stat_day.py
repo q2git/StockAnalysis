@@ -88,24 +88,40 @@ def fun1(s):
     #avg_price = sum(map(lambda x:x[0]*x[1], zip(s.close,s.volume)))/s.volume.sum()
     
     #sum_vol = s.volume.sum()
-    
-    rise = np.where(s.p_change>=0.1, 1.0, 0).sum()
-    #fall = np.where(s.p_change<=-0.1, 1.0, 0).sum()
-    #rf_ratio = rise/fall if rise>=fall else -fall/rise 
-    rise0 = ((rise) / s.code.count()) * 100
+    # rise and fall ratio
+    rise1 = np.where(s.p_change>=0.1, 1.0, 0).sum()
+    fall1 = np.where(s.p_change<=-0.1, 1.0, 0).sum()
+    szb1 = ((rise1) / s.code.count()) * 100
+    xdb1 = ((fall1) / s.code.count()) * 100
      
-    rise_3 = np.where(s.p_change>=3, 1.0, 0).sum()
-    #fall_3 = np.where(s.p_change<=-3, 1.0, 0).sum()
-    #rf_ratio_3 = rise_3/fall_3 if rise_3>=fall_3 else -fall_3/rise_3  
-    rise3 = ((rise_3) / s.code.count()) * 100   
+    rise2 = np.where(s.p_change>=3, 1.0, 0).sum()
+    fall2 = np.where(s.p_change<=-3, 1.0, 0).sum() 
+    szb2 = ((rise2) / s.code.count()) * 100   
+    xdb2 = ((fall2) / s.code.count()) * 100 
      
-    #zt = np.where(s.p_change>=9.9, 1, 0).sum()
-    #dt = np.where(s.p_change<=9.9, 1, 0).sum()
-    crit = (s.close>=s.ma20) & (s.ma20>=s.ma30) & (s.ma30>=s.ma60)
-    over_ma = (np.where(crit, 1.0, 0).sum() / s.code.count()) * 100
+    rise3 = np.where(s.p_change>=7, 1.0, 0).sum()
+    fall3 = np.where(s.p_change<=-7, 1.0, 0).sum() 
+    szb3 = ((rise3) / s.code.count()) * 100   
+    xdb3 = ((fall3) / s.code.count()) * 100
     
-    return pd.Series([over_ma, avg_close, rise0, rise3, ], 
-                     index=['over_ma', 'avg_close', 'rise0', 'rise3', ])
+    # rising trend
+    crit1 = (s.close>=s.ma5) & (s.ma5>=s.ma10) & (s.ma10>=s.ma20)\
+             & (s.ma20>=s.ma30) & (s.ma30>=s.ma60)
+    crit2 = (s.close>=s.ma20) & (s.ma20>=s.ma30) & (s.ma30>=s.ma60)
+    sstd1 = (np.where(crit1, 1.0, 0).sum() / s.code.count()) * 100
+    sstd2 = (np.where(crit2, 1.0, 0).sum() / s.code.count()) * 100  
+
+    # falling trend
+    crit1 = (s.close<s.ma5) & (s.ma5<s.ma10) & (s.ma10<s.ma20)\
+             & (s.ma20<s.ma30) & (s.ma30<s.ma60)
+    crit2 = (s.close<s.ma20) & (s.ma20<s.ma30) & (s.ma30<s.ma60)
+    xdtd1 = (np.where(crit1, 1.0, 0).sum() / s.code.count()) * 100
+    xdtd2 = (np.where(crit2, 1.0, 0).sum() / s.code.count()) * 100 
+    
+    return pd.Series([sstd1, sstd2, xdtd1, xdtd2, szb1, szb2, szb3, 
+                      xdb1, xdb2, xdb3, ], 
+                     index=['sstd1', 'sstd2', 'xdtd1', 'xdtd2', 'szb1', 
+                     'szb2', 'szb3', 'xdb1', 'xdb2', 'xdb3', ])
 
 
     
@@ -114,17 +130,28 @@ def add_MAs(dataframe, *args):
     df = dataframe.set_index('date').sort_index()
     
     for day in args:
-        ma = df.groupby('code')['close'].rolling(day).mean()\
-             .reset_index().rename(columns={'close':'ma{}'.format(day)})
-             
+        if pd.__version__ >= '0.18':
+            ma = df.groupby('code')['close'].rolling(day).mean()\
+                 .reset_index().rename(columns={'close':'ma{}'.format(day)})
+        else:
+            #pandas ver<0.18
+            _ma = df.groupby('code').apply(lambda x: pd.rolling_mean(x.close, window=day))
+            temp = []
+            for code in _ma.index:
+                t = _ma.xs(code).to_frame().reset_index()
+                t['code'] = code
+                temp.append(t)
+            ma = pd.concat(temp).rename(columns={0:'ma{}'.format(day)})    
+
+            
         dataframe = pd.merge(dataframe, ma, on=['code', 'date'])
     
     return dataframe    
 
+
     
-def main():
-    years = raw_input('Years(eg, 2015.2016) or all: ')
-    stk = raw_input('Stk code: ')
+def stat(years='2016', stk='000001', window=10):
+    
     fn = os.path.join(STAT_FOLDER, 'stat_day_{}.xlsx'.format(years))  
     
     dfidxs = pd.DataFrame()
@@ -162,23 +189,61 @@ def main():
 
     
     #df = pd.concat(dfs)
-    w = 10 #input('window: ')
-    df['rise3'] = pd.rolling_mean(df.rise3,window=w,)
-    #df['avg_close'] = pd.rolling_mean(df.avg_close,window=w,)     
-    df['rise0'] = pd.rolling_mean(df.rise0,window=w,) 
-    #df['over_ma'] = pd.rolling_mean(df.over_ma,window=w,)     
-    df.to_excel(fn)                
-    return df[['over_ma', 'rise0', 'rise3', stk, 'idx']]
+    #window = 5
+    for name in ['szb1', 'szb2', 'szb3', 'xdb1', 'xdb2', 'xdb3', ]:
+        df[name] = df[name].rolling(window=window).mean()
   
+    df.to_excel(fn)                
+    return df#[['over_ma', 'rise0', 'rise3', stk, 'idx']]
+
+
+
+def plot1(df, stk):
+    fig, axes = plt.subplots(5, )#figsize=(6, 6))
+    #plt.subplots_adjust(wspace=0.5, hspace=0.5)
+    #fig, axes = plt.subplots(nrows=2, ncols=2) 
+    #target = [axes[0][0],axes[0][1],axes[1][0],axes[1][1]]
+
+    df1 = df.ix[:, [stk,'idx']]
+    df2 = df.ix[:, ['sstd1', 'sstd2', 'xdtd1', 'xdtd2', 'idx']]
+    df3 = df.ix[:, ['szb1', 'szb2', 'szb3', 'idx']]
+    df4 = df.ix[:, ['xdb1', 'xdb2', 'xdb3', 'idx']]
     
-if __name__ == '__main__':
-    df = main()
+    df1.plot(kind='line', secondary_y=stk, grid=True, subplots=False, 
+             legend=True, rot='vertical',
+             xticks=np.arange(0, len(df), 10))  
 
-    df.plot(kind='line', grid=True, subplots=True, legend=False, rot='vertical',
+    df2.plot(subplots=True, ax=axes, legend=False,  grid=True, rot='vertical',
+             sharex=True, figsize=(10, 8), xticks=np.arange(0, len(df2), 10),
+             ) 
+             
+    [ax.legend(loc='center left', bbox_to_anchor=(1.0, 0.5)) for ax in axes]
+             
+    df3.plot(kind='line', grid=True, subplots=True, legend=False, rot='vertical',
                  xticks=np.arange(0, len(df), 10))
-
+                 
     [ax.legend(loc='center left', bbox_to_anchor=(1.0, 0.5)) for ax in plt.gcf().axes]
-    #plt.tight_layout()     
-    plt.show()
+
+    df4.plot(kind='line', grid=True, subplots=True, legend=False, rot='vertical',
+                 xticks=np.arange(0, len(df), 10))  
+                 
+    [ax.legend(loc='center left', bbox_to_anchor=(1.0, 0.5)) for ax in plt.gcf().axes]
+             
+ 
    
-    raw_input('END.') #press any key to exit
+def main(): 
+    years = raw_input('Years(eg, 2015.2016) or all: ')
+    stk = raw_input('Stk code: ')
+    w = input('window: ')
+    
+    df = stat(years, stk, w)
+    
+    plot1(df, stk)
+   #plt.tight_layout()     
+    plt.show() 
+ 
+   
+if __name__ == '__main__':
+    main()
+
+    #raw_input('END.') #press any key to exit
