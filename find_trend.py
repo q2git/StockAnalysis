@@ -19,98 +19,123 @@ if not os.path.exists(STAT_FOLDER):
 
 
 def add_MAs(df, *args):
-    """ add moving average to dataframe, args=30,60,etc """
+    ''' add moving average to dataframe '''
     
-    df = df.set_index('date').sort_index()
+    df0 = df.set_index('date').sort_index()
     
     for day in args:
-        ma = df.groupby('code')['close'].rolling(day).mean()\
+        ma = df0.groupby('code')['close'].rolling(day).mean()\
              .reset_index().rename(columns={'close':'ma{}'.format(day)})
-          
+        
         df = pd.merge(df, ma, on=['code', 'date'])
     
     return df 
 
     
-def db_to_dfs(years='all', ktype='D'):
+def db2df(years='2016', ktype='D', table='stocks'):
     """ reading data from db and return DataFrame object """
-    dfidx = pd.DataFrame()
-    dfstk = pd.DataFrame()
+    
+    df = pd.DataFrame()
     
     for year in years.split('.'):
  
         db = os.path.join(DATA_FOLDER, '{}_{}.db'.format(year, ktype))
     
         with sqlite3.connect(db) as con:
-            print 'Reading table [indexs] from [{}] ...'.format(db), 
-            dfidx.append(pd.read_sql('select * from indexs', con))
-            print 'Done.\nReading table [stocks] from [{}] ...'.format(db),
-            dfstk.append(pd.read_sql('select * from stocks', con))
+            sql = 'select * from {}'.format(table)  #stocks or indexs 
+            
+            print 'Reading table [{}] from [{}] ...'.format(table, db), 
+            df = df.append(pd.read_sql(sql, con), ignore_index=True)
             print 'Done.'
-        
-    return (dfidx, dfstk)   
     
+    return df      
 
 
 def fun1(s):
     """ apply function """
+    kwargs = {}
     # rise and fall ratio
-    rise1 = np.where(s.p_change>=0.1, 1.0, 0).sum()
-    fall1 = np.where(s.p_change<=-0.1, 1.0, 0).sum()
-    szb1 = ((rise1) / s.code.count()) * 100
-    xdb1 = ((fall1) / s.code.count()) * 100
-     
-    rise2 = np.where(s.p_change>=3, 1.0, 0).sum()
-    fall2 = np.where(s.p_change<=-3, 1.0, 0).sum() 
-    szb2 = ((rise2) / s.code.count()) * 100   
-    xdb2 = ((fall2) / s.code.count()) * 100 
-     
-    rise3 = np.where(s.p_change>=7, 1.0, 0).sum()
-    fall3 = np.where(s.p_change<=-7, 1.0, 0).sum() 
-    szb3 = ((rise3) / s.code.count()) * 100   
-    xdb3 = ((fall3) / s.code.count()) * 100
+    for i in [0.1, 3, 7]:
+        k1 = 'pct_sz{:.0f}'.format(i)
+        k2 = 'pct_xd{:.0f}'.format(i)
+        rise = np.where(s.p_change>=i, 1.0, 0).sum()
+        fall = np.where(s.p_change<=-i, 1.0, 0).sum()
+        kwargs[k1] = ((rise) / s.code.count()) * 100
+        kwargs[k2] = ((fall) / s.code.count()) * 100     
     
-    # rising trend
-    crit1 = (s.close>=s.ma5) & (s.ma5>=s.ma10) & (s.ma10>=s.ma20)\
+    # rising trend        
+    c1 = (s.close>=s.ma5) & (s.ma5>=s.ma10) & (s.ma10>=s.ma20)\
              & (s.ma20>=s.ma30) & (s.ma30>=s.ma60)
-    crit2 = (s.close>=s.ma20) & (s.ma20>=s.ma30) & (s.ma30>=s.ma60)
-    sstd1 = (np.where(crit1, 1.0, 0).sum() / s.code.count()) * 100
-    sstd2 = (np.where(crit2, 1.0, 0).sum() / s.code.count()) * 100  
+    c2 = (s.close>=s.ma20) & (s.ma20>=s.ma30) & (s.ma30>=s.ma60)
+    kwargs['ma_ss5'] = (np.where(c1, 1.0, 0).sum() / s.code.count()) * 100
+    kwargs['ma_ss20'] = (np.where(c2, 1.0, 0).sum() / s.code.count()) * 100  
 
     # falling trend
-    crit1 = (s.close<s.ma5) & (s.ma5<s.ma10) & (s.ma10<s.ma20)\
+    c3 = (s.close<s.ma5) & (s.ma5<s.ma10) & (s.ma10<s.ma20)\
              & (s.ma20<s.ma30) & (s.ma30<s.ma60)
-    crit2 = (s.close<s.ma20) & (s.ma20<s.ma30) & (s.ma30<s.ma60)
-    xdtd1 = (np.where(crit1, 1.0, 0).sum() / s.code.count()) * 100
-    xdtd2 = (np.where(crit2, 1.0, 0).sum() / s.code.count()) * 100 
+    c4 = (s.close<s.ma20) & (s.ma20<s.ma30) & (s.ma30<s.ma60)
+    kwargs['ma_xj5'] = (np.where(c3, 1.0, 0).sum() / s.code.count()) * 100
+    kwargs['ma_xj20'] = (np.where(c4, 1.0, 0).sum() / s.code.count()) * 100 
     
-    return pd.Series([sstd1, sstd2, xdtd1, xdtd2, szb1, szb2, szb3, 
-                      xdb1, xdb2, xdb3, ], 
-                     index=['sstd1', 'sstd2', 'xdtd1', 'xdtd2', 'szb1', 
-                     'szb2', 'szb3', 'xdb1', 'xdb2', 'xdb3', ])
+    return pd.Series(data=kwargs.values(), index=kwargs.keys())
                      
                      
                      
-def stat(years='2016', stk='000001', window=10):
+def stat(years='2016', window=10):
     """ statistic analysis """
     
-    dfidxs, dfstks = db_to_dfs()
-
-    dfidxs = dfidxs.groupby(['code','date']).max() 
-    dfidx = dfidxs.ix['sh',['close']].rename(columns={'close':'idx'})
+    dfidxs = db2df(years, table='indexs')
+    dfidxs = dfidxs.groupby(['code','date'])['close'].max().unstack(0)
+    dfidx = dfidxs['sh'].rename('idx')
     
+    dfstks = db2df(years)
     dfstks = add_MAs(dfstks, 30, 60)
-    dfstk = dfstks[dfstks['code']==stk].set_index('date')[['close']]\
-            .rename(columns={'close':stk})
-    
-    dfgb = dfstks.groupby('date').apply(fun1)
-    df = pd.concat([dfidx, dfstk, dfgb], axis=1, join_axes=[dfidx.index])
+
+    df = dfstks.groupby('date').apply(fun1)
+
+    for colname in df.columns:
+        if not colname.startswith('ma_'):
+            df[colname] = df[colname].rolling(window=window).mean()
+
+    df = pd.concat([dfidx, df], axis=1, join_axes=[dfidx.index])
+           
+    return df.sort_index(1)
 
     
-    #df = pd.concat(dfs)
-    #window = 5
-    for name in ['szb1', 'szb2', 'szb3', 'xdb1', 'xdb2', 'xdb3', ]:
-        df[name] = df[name].rolling(window=window).mean()
-  
-             
-    return df
+def plot1(df):
+    
+    for key in ['pct_sz','pct_xd','ma_ss','ma_xj']:
+        ks = []
+
+        for colname in df.columns:
+            if colname.startswith(key):
+                ks.append(colname)
+                
+        ks.append('idx')
+
+        df[ks].plot(kind='line', grid=True, subplots=True, legend=False, 
+                    rot='vertical', xticks=np.arange(0, len(df), 10))  
+                 
+        for ax in plt.gcf().axes:
+            ax.legend(loc='center left', bbox_to_anchor=(1.0, 0.5)) 
+           
+   
+     
+def main():
+    years = raw_input('Years(eg, 2015.2016) or all: ')
+    w = input('window: ')
+    
+    df = stat(years, w)
+    
+    plot1(df)
+     
+    plt.show() 
+ 
+
+
+    
+    
+if __name__ == '__main__':
+    main()
+    
+    
