@@ -6,14 +6,14 @@ Created on Tue Oct 11 16:53:08 2016
 
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-import matplotlib.ticker as ticker
 import pandas as pd
 import numpy as np
 import sqlite3
 import os
+import datetime
 
 
-
+TODAY = datetime.date.today()
 DATA_FOLDER = r'data\all'
 STAT_FOLDER = r'data\stat'
 if not os.path.exists(STAT_FOLDER):
@@ -61,10 +61,8 @@ def fun1(s):
     for i in [0.1, 3, 7]:
         k1 = 'pc_a{:.0f}'.format(i)
         k2 = 'pc_b{:.0f}'.format(i)
-        #c1 = np.where(s['p_change']>=i, 1.0, 0).sum() #rise
-        #c2 = np.where(s['p_change']<=-i, 1.0, 0).sum() #fall
-        kwargs[k1] = (np.where(s['p_change']>=i, 1.0, 0).sum())# / cnt) * 100
-        kwargs[k2] = (np.where(s['p_change']<=-i, 1.0, 0).sum())# / cnt) * 100     
+        kwargs[k1] = (np.where(s['p_change']>=i, 1.0, 0).sum() / cnt) * 100
+        kwargs[k2] = (np.where(s['p_change']<=-i, 1.0, 0).sum() / cnt) * 100     
 
     # ma trends
     mas = [5, 10, 20, 30, 60]
@@ -96,7 +94,8 @@ def stat(years='2016', window=None):
     
     dfidxs = db2df(years, table='indexs')
     dfidxs = dfidxs.groupby(['code','date'])['close'].max().unstack(0)
-    dfidx = dfidxs['sh'].rename('idx')
+    dfidxs.rename(columns=lambda x:'zs_{}'.format(x), inplace=True)
+    #dfidx = dfidxs[idx].rename('zs_{}'.format(idx))
     
     dfstks = db2df(years)
     dfstks = add_MAs(dfstks, 30, 60)
@@ -108,56 +107,61 @@ def stat(years='2016', window=None):
             if not colname.startswith('ma_'):
                 df[colname] = df[colname].rolling(window=window).mean()
 
-    df = pd.concat([dfidx, df], axis=1, join_axes=[dfidx.index]) #.sort_index(1)
+    df = pd.concat([dfidxs, df], axis=1, join_axes=[dfidxs.index]) #.sort_index(1)
      
     return df
 
     
-def plot1(df):
+def plot1(df, ref='sh'):
     
-    #df.index = pd.to_datetime(df.index, format="%Y-%m-%d") #.to_period(freq='D')
-    df.index = pd.to_datetime(df.index).to_period(freq='D')
-    
-    for key in ['pc_a','pc_b','ma_a','ma_b','ma_u','ma_d']:
-        ks = []
+    df.index = pd.to_datetime(df.index, format="%Y-%m-%d") #.to_period(freq='D')
+    #df.index = pd.to_datetime(df.index).to_period(freq='D') 
 
-        for n in df.columns:
-            if n.startswith(key):
-                ks.append(n)
-                
-        ks.append('idx')
+    colnames = df.columns
+    #ref = next((x for x in colnames if x.startswith('zs_')))
+    ref = 'zs_{}'.format(ref) 
+    
+    for key in ['pc_a','pc_b','ma_a','ma_b','ma_u','ma_d','zs']:
+        
+        ks = filter(lambda x: x.startswith(key), colnames)
+        if key != 'zs': 
+            ks.append(ref)
 
         axes = df[ks].plot(kind='line', grid=True, subplots=True, legend=False, 
-                            #x_compat=True,
-                            )
+                           rot=0, )
 
         fig = plt.gcf() 
               
         for ax in axes:
-            ax.legend(loc='upper left') #, bbox_to_anchor=(1.0, 0.5))
-            ax.xaxis.set_major_locator(ticker.MaxNLocator(5))            
-            #ax.xaxis.set_minor_locator(mdates.DayLocator(interval=5))
-            ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(3))            
+            ax.legend(loc='upper left', prop={'size':8},) #, bbox_to_anchor=(1.0, 0.5))
+            ax.xaxis.set_minor_locator(mdates.WeekdayLocator(interval=1))           
             ax.xaxis.set_minor_formatter(mdates.DateFormatter('%d'))
-            
-        #fig.autofmt_xdate(bottom=0.2, rotation=30, ha='right') 
-            
-        fig.set_size_inches(16, 10)                
-        fig.savefig(os.path.join(STAT_FOLDER, key), dpi=200)               
- 
-    
+            #ax.xaxis.grid(True, which="minor") 
+            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))            
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('\n\n%b\n%Y'))  
+            ax.tick_params(axis='both', which='both', labelsize=8)
+
+        plt.tick_params(axis='x', which='minor', labelsize=6,)
+        plt.setp(axes[-1].xaxis.get_minorticklabels(), rotation=90) 
+        
+        fig.set_size_inches(12, 8) 
+        fn = '{}_{}'.format(key, TODAY)               
+        fig.savefig(os.path.join(STAT_FOLDER, fn), dpi=200) 
+               
+
+        
 def main():
     years = raw_input('Years(eg, 2015.2016) or all: ')
-    w = raw_input('window: ')
+    idx = raw_input('Index(sh,sz,hs300,sz50,zxb,cyb): ')
+    w = raw_input('Window size: ')
     if w: w=int(w)
     
     df = stat(years, w)
     
-    plot1(df)
+    plot1(df, idx)
  
-    #plt.show() 
- 
-
+    if raw_input('Show plot?: '):
+        plt.show() 
     
     
 if __name__ == '__main__':

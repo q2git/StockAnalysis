@@ -228,8 +228,23 @@ def plot1(df, stk):
                  xticks=np.arange(0, len(df), 10))  
                  
     [ax.legend(loc='center left', bbox_to_anchor=(1.0, 0.5)) for ax in plt.gcf().axes]
-             
- 
+    '''         
+        fig = plt.gcf() 
+              
+        for ax in axes:
+            ax.legend(loc='upper left') #, bbox_to_anchor=(1.0, 0.5))
+            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))#(ticker.MaxNLocator(6))            
+            ax.xaxis.set_minor_locator(mdates.DayLocator(interval=5))
+            #ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))            
+            ax.xaxis.set_minor_formatter(mdates.DateFormatter('%d'))
+            #ax.xaxis.set_major_formatter(mdates.DateFormatter('%d'))  
+            ax.xaxis.grid(True, which="minor")
+        #fig.autofmt_xdate(bottom=0.2, rotation=30, ha='right') 
+        plt.tick_params(axis='both', which='major', labelsize=10)
+        plt.tick_params(axis='x', which='minor', labelsize=6)         
+        fig.set_size_inches(16, 10)                
+        fig.savefig(os.path.join(STAT_FOLDER, key), dpi=200) 
+    '''
    
 def main(): 
     years = raw_input('Years(eg, 2015.2016) or all: ')
