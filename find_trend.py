@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
 """
 Created on Tue Oct 11 16:53:08 2016
-
 @author: q2git
 """
 
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import matplotlib.ticker as ticker
 import pandas as pd
 import numpy as np
 import sqlite3
 import os
+
 
 
 DATA_FOLDER = r'data\all'
@@ -54,34 +56,42 @@ def db2df(years='2016', ktype='D', table='stocks'):
 def fun1(s):
     """ apply function """
     kwargs = {}
+    cnt = s.code.count()
     # rise and fall ratio
     for i in [0.1, 3, 7]:
-        k1 = 'pct_sz{:.0f}'.format(i)
-        k2 = 'pct_xd{:.0f}'.format(i)
-        rise = np.where(s.p_change>=i, 1.0, 0).sum()
-        fall = np.where(s.p_change<=-i, 1.0, 0).sum()
-        kwargs[k1] = ((rise) / s.code.count()) * 100
-        kwargs[k2] = ((fall) / s.code.count()) * 100     
-    
-    # rising trend        
-    c1 = (s.close>=s.ma5) & (s.ma5>=s.ma10) & (s.ma10>=s.ma20)\
-             & (s.ma20>=s.ma30) & (s.ma30>=s.ma60)
-    c2 = (s.close>=s.ma20) & (s.ma20>=s.ma30) & (s.ma30>=s.ma60)
-    kwargs['ma_ss5'] = (np.where(c1, 1.0, 0).sum() / s.code.count()) * 100
-    kwargs['ma_ss20'] = (np.where(c2, 1.0, 0).sum() / s.code.count()) * 100  
+        k1 = 'pc_a{:.0f}'.format(i)
+        k2 = 'pc_b{:.0f}'.format(i)
+        #c1 = np.where(s['p_change']>=i, 1.0, 0).sum() #rise
+        #c2 = np.where(s['p_change']<=-i, 1.0, 0).sum() #fall
+        kwargs[k1] = (np.where(s['p_change']>=i, 1.0, 0).sum())# / cnt) * 100
+        kwargs[k2] = (np.where(s['p_change']<=-i, 1.0, 0).sum())# / cnt) * 100     
 
-    # falling trend
-    c3 = (s.close<s.ma5) & (s.ma5<s.ma10) & (s.ma10<s.ma20)\
-             & (s.ma20<s.ma30) & (s.ma30<s.ma60)
-    c4 = (s.close<s.ma20) & (s.ma20<s.ma30) & (s.ma30<s.ma60)
-    kwargs['ma_xj5'] = (np.where(c3, 1.0, 0).sum() / s.code.count()) * 100
-    kwargs['ma_xj20'] = (np.where(c4, 1.0, 0).sum() / s.code.count()) * 100 
+    # ma trends
+    mas = [5, 10, 20, 30, 60]
+    f = lambda x: 'ma{}'.format(x)
+
+    for ma in mas:
+        k1 = 'ma_a{:02d}'.format(ma) #above
+        k2 = 'ma_b{:02d}'.format(ma) #below        
+        kwargs[k1] = (np.where(s['close']>=s[f(ma)], 1.0, 0).sum() / cnt) * 100        
+        kwargs[k2] = (np.where(s['close']<s[f(ma)], 1.0, 0).sum() / cnt) * 100    
     
-    return pd.Series(data=kwargs.values(), index=kwargs.keys())
+    for i in [5, 20]:
+        idx = mas.index(i)
+        _mas = zip(mas[idx:], mas[idx+1:])
+        k1 = 'ma_u{:02d}'.format(i) #up trend
+        k2 = 'ma_d{:02d}'.format(i) #down trend 
+        c1 = reduce(lambda m,n: m&n, map(lambda (x,y):s[f(x)]>=s[f(y)], _mas))
+        c2 = reduce(lambda m,n: m&n, map(lambda (x,y):s[f(x)]<s[f(y)], _mas)) 
+        kwargs[k1] = (np.where(c1, 1.0, 0).sum() / cnt) * 100
+        kwargs[k2] = (np.where(c2, 1.0, 0).sum() / cnt) * 100     
+
+    ser = pd.Series(data=kwargs.values(), index=kwargs.keys()).sort_index()
+    
+    return ser                    
                      
                      
-                     
-def stat(years='2016', window=10):
+def stat(years='2016', window=None):
     """ statistic analysis """
     
     dfidxs = db2df(years, table='indexs')
@@ -92,50 +102,64 @@ def stat(years='2016', window=10):
     dfstks = add_MAs(dfstks, 30, 60)
 
     df = dfstks.groupby('date').apply(fun1)
+    
+    if window:
+        for colname in df.columns:
+            if not colname.startswith('ma_'):
+                df[colname] = df[colname].rolling(window=window).mean()
 
-    for colname in df.columns:
-        if not colname.startswith('ma_'):
-            df[colname] = df[colname].rolling(window=window).mean()
-
-    df = pd.concat([dfidx, df], axis=1, join_axes=[dfidx.index])
-           
-    return df.sort_index(1)
+    df = pd.concat([dfidx, df], axis=1, join_axes=[dfidx.index]) #.sort_index(1)
+     
+    return df
 
     
 def plot1(df):
     
-    for key in ['pct_sz','pct_xd','ma_ss','ma_xj']:
+    #df.index = pd.to_datetime(df.index, format="%Y-%m-%d") #.to_period(freq='D')
+    df.index = pd.to_datetime(df.index).to_period(freq='D')
+    
+    for key in ['pc_a','pc_b','ma_a','ma_b','ma_u','ma_d']:
         ks = []
 
-        for colname in df.columns:
-            if colname.startswith(key):
-                ks.append(colname)
+        for n in df.columns:
+            if n.startswith(key):
+                ks.append(n)
                 
         ks.append('idx')
 
-        df[ks].plot(kind='line', grid=True, subplots=True, legend=False, 
-                    rot='vertical', xticks=np.arange(0, len(df), 10))  
-                 
-        for ax in plt.gcf().axes:
-            ax.legend(loc='center left', bbox_to_anchor=(1.0, 0.5)) 
-           
-   
-     
+        axes = df[ks].plot(kind='line', grid=True, subplots=True, legend=False, 
+                            #x_compat=True,
+                            )
+
+        fig = plt.gcf() 
+              
+        for ax in axes:
+            ax.legend(loc='upper left') #, bbox_to_anchor=(1.0, 0.5))
+            ax.xaxis.set_major_locator(ticker.MaxNLocator(5))            
+            #ax.xaxis.set_minor_locator(mdates.DayLocator(interval=5))
+            ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(3))            
+            ax.xaxis.set_minor_formatter(mdates.DateFormatter('%d'))
+            
+        #fig.autofmt_xdate(bottom=0.2, rotation=30, ha='right') 
+            
+        fig.set_size_inches(16, 10)                
+        fig.savefig(os.path.join(STAT_FOLDER, key), dpi=200)               
+ 
+    
 def main():
     years = raw_input('Years(eg, 2015.2016) or all: ')
-    w = input('window: ')
+    w = raw_input('window: ')
+    if w: w=int(w)
     
     df = stat(years, w)
     
     plot1(df)
-     
-    plt.show() 
  
-
+    #plt.show() 
+ 
 
     
     
 if __name__ == '__main__':
     main()
-    
     
