@@ -138,22 +138,27 @@ def plot1(df, ref='sh'):
             ax.xaxis.set_minor_formatter(mdates.DateFormatter('%d'))
             #ax.xaxis.grid(True, which="minor") 
             ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))            
-            ax.xaxis.set_major_formatter(mdates.DateFormatter('\n\n%b\n%Y'))  
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%b\n%Y'))  
             ax.tick_params(axis='both', which='both', labelsize=8)
 
-        plt.tick_params(axis='x', which='minor', labelsize=6,)
+        plt.tick_params(axis='x', which='minor', labelsize=6, )
+        plt.tick_params(axis='x', which='major', pad=20, )        
         plt.setp(axes[-1].xaxis.get_minorticklabels(), rotation=90) 
-        
-        fig.set_size_inches(12, 8) 
+
+        fig.set_size_inches(16, 9) 
         fn = '{}_{}'.format(key, TODAY)               
         fig.savefig(os.path.join(STAT_FOLDER, fn), dpi=200) 
                
 
         
 def main():
-    years = raw_input('Years(eg, 2015.2016) or all: ')
-    idx = raw_input('Index(sh,sz,hs300,sz50,zxb,cyb): ')
-    w = raw_input('Window size: ')
+    years = raw_input('Years(=2016, all): ')
+    if not years: years='2016'
+    
+    idx = raw_input('Index(=sh,sz,hs300,sz50,zxb,cyb): ')
+    if not idx: idx='sh'
+    
+    w = raw_input('Window size(=None): ')
     if w: w=int(w)
     
     df = stat(years, w)
