@@ -57,26 +57,26 @@ def fun1(s):
     """ apply function """
     kwargs = {}
     cnt = s.code.count()
-    # rise and fall ratio
-    for i in [0.1, 3, 7]:
+    # p change
+    for i in [0.1, 7]:
         k1 = 'pc_a{:.0f}'.format(i)
         k2 = 'pc_b{:.0f}'.format(i)
         kwargs[k1] = (np.where(s['p_change']>=i, 1.0, 0).sum() / cnt) * 100
         kwargs[k2] = (np.where(s['p_change']<=-i, 1.0, 0).sum() / cnt) * 100     
 
     # ma trends
-    mas = [5, 10, 20, 30, 60]
+    mas_c = [5, 10, 20, 30, 60]
     f = lambda x: 'ma{}'.format(x)
 
-    for ma in mas:
+    for ma in mas_c[::2]:
         k1 = 'ma_a{:02d}'.format(ma) #above
         k2 = 'ma_b{:02d}'.format(ma) #below        
         kwargs[k1] = (np.where(s['close']>=s[f(ma)], 1.0, 0).sum() / cnt) * 100        
         kwargs[k2] = (np.where(s['close']<s[f(ma)], 1.0, 0).sum() / cnt) * 100    
     
     for i in [5, 20]:
-        idx = mas.index(i)
-        _mas = zip(mas[idx:], mas[idx+1:])
+        idx = mas_c.index(i)
+        _mas = zip(mas_c[idx:], mas_c[idx+1:])
         k1 = 'ma_u{:02d}'.format(i) #up trend
         k2 = 'ma_d{:02d}'.format(i) #down trend 
         c1 = reduce(lambda m,n: m&n, map(lambda (x,y):s[f(x)]>=s[f(y)], _mas))
@@ -84,12 +84,17 @@ def fun1(s):
         kwargs[k1] = (np.where(c1, 1.0, 0).sum() / cnt) * 100
         kwargs[k2] = (np.where(c2, 1.0, 0).sum() / cnt) * 100     
 
+    # close, amplitude, volumn
+    kwargs['avg_c'] =  np.multiply(s['close'], s['volume']).sum() / s['volume'].sum()
+    kwargs['avg_a'] = (((s['high']-s['low']) / s['low']).mean()) * 100
+    kwargs['avg_v'] = s['volume'].mean()          
+    
     ser = pd.Series(data=kwargs.values(), index=kwargs.keys()).sort_index()
     
     return ser                    
                      
                      
-def stat(years='2016', window=None):
+def stat(years='2016', w=None):
     """ statistic analysis """
     
     dfidxs = db2df(years, table='indexs')
@@ -102,10 +107,11 @@ def stat(years='2016', window=None):
 
     df = dfstks.groupby('date').apply(fun1)
     
-    if window:
+    if w:
         for colname in df.columns:
             if not colname.startswith('ma_'):
-                df[colname] = df[colname].rolling(window=window).mean()
+                df[colname] = df[colname].rolling(window=w).mean()
+                df.rename(columns={colname:'{}_{}'.format(colname, w)},inplace=True)
 
     df = pd.concat([dfidxs, df], axis=1, join_axes=[dfidxs.index]) #.sort_index(1)
      
@@ -121,7 +127,7 @@ def plot1(df, ref='sh'):
     #ref = next((x for x in colnames if x.startswith('zs_')))
     ref = 'zs_{}'.format(ref) 
     
-    for key in ['pc_a','pc_b','ma_a','ma_b','ma_u','ma_d','zs']:
+    for key in ['pc_a','pc_b','ma_a','ma_b','ma_u','ma_d','avg','zs']:
         
         ks = filter(lambda x: x.startswith(key), colnames)
         if key != 'zs': 
@@ -171,4 +177,3 @@ def main():
     
 if __name__ == '__main__':
     main()
-    
