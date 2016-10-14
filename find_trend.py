@@ -39,7 +39,7 @@ def db2df(years='2016', ktype='D', table='stocks'):
     return df      
 
 
-def add_MAs(df, *args):
+def add_Cols(df, *args):
     ''' add moving average to dataframe '''
     
     print 'Adding columns to dataframe...',
@@ -52,10 +52,10 @@ def add_MAs(df, *args):
         
         df = pd.merge(df, ma, on=['code', 'date'])
   
-    c_max = df0.groupby('code')['close'].expanding().max()\
+    c_max = df0.groupby('code')['close'].rolling(90,min_periods=30).max()\
             .reset_index().rename(columns={'close':'c_max'})
             
-    c_min = df0.groupby('code')['close'].expanding(center=True).min()\
+    c_min = df0.groupby('code')['close'].rolling(90,min_periods=30).min()\
             .reset_index().rename(columns={'close':'c_min'})
     
     df = pd.merge(df, c_max, on=['code', 'date'])
@@ -70,7 +70,7 @@ def fun1(s):
     """ apply function """
     
     kwargs = {}
-    pct_coff = 100/s.code.count() #to percentage
+    pct_coff = 1 #100/s.code.count() #to percentage
     # p change
     for i in [0.1, 7]:
         k1 = 'pc_A{:.0f}'.format(i)
@@ -104,8 +104,8 @@ def fun1(s):
     kwargs['avg_v'] = s['volume'].mean()          
  
     #above expanding_max, below expanding_min
-    kwargs['c_max'] = np.where(s['close']>=s['c_max'], 1.0, 0).sum() #/ cnt) * 100
-    kwargs['c_min'] = np.where(s['close']<=s['c_min'], 1.0, 0).sum() #/ cnt) * 100
+    kwargs['c_max'] = np.where(s['close']>=s['c_max'], 1.0, 0).sum() 
+    kwargs['c_min'] = np.where(s['close']<=s['c_min'], 1.0, 0).sum() 
     
     ser = pd.Series(data=kwargs.values(), index=kwargs.keys()).sort_index()
     
@@ -121,7 +121,7 @@ def stat(years='2016', w=None):
     #dfidx = dfidxs[idx].rename('zs_{}'.format(idx))
     
     dfstks = db2df(years)
-    dfstks = add_MAs(dfstks, 30, 60)
+    dfstks = add_Cols(dfstks, 30, 60)
 
     print 'Performing statistics...',
     
@@ -149,17 +149,17 @@ def plot1(df, ref='sh'):
     #ref = next((x for x in colnames if x.startswith('zs_')))
     ref = 'zs_{}'.format(ref) 
     
-    for key in ['pc_A','pc_B','ma_A','ma_B','ma_U','ma_D','avg_','c_','zs']:
+    for key in ['pc_A','pc_B','ma_A','ma_B','ma_U','ma_D','avg','c_m','zs']:
         
         ks = filter(lambda x: x.startswith(key), colnames)
         if key != 'zs': 
             ks.append(ref)
 
         axes = df[ks].plot(kind='line', grid=True, subplots=True, legend=False, 
-                           rot=0, )
+                           rot=0, marker='o',)
 
         fig = plt.gcf() 
-              
+
         for ax in axes:
             ax.legend(loc='upper left', prop={'size':8},) #, bbox_to_anchor=(1.0, 0.5))
             ax.xaxis.set_minor_locator(mdates.WeekdayLocator(interval=1))           
@@ -174,7 +174,7 @@ def plot1(df, ref='sh'):
         plt.setp(axes[-1].xaxis.get_minorticklabels(), rotation=90) 
 
         fig.set_size_inches(16, 9) 
-        fn = '{}_{}'.format(key, TODAY)               
+        fn = '{}_{}'.format(TODAY, key)               
         fig.savefig(os.path.join(STAT_FOLDER, fn), dpi=200) 
                
 
