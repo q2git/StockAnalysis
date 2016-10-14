@@ -19,20 +19,6 @@ STAT_FOLDER = r'data\stat'
 if not os.path.exists(STAT_FOLDER):
     os.mkdir(STAT_FOLDER)
 
-
-def add_MAs(df, *args):
-    ''' add moving average to dataframe '''
-    
-    df0 = df.set_index('date').sort_index()
-    
-    for day in args:
-        ma = df0.groupby('code')['close'].rolling(day).mean()\
-             .reset_index().rename(columns={'close':'ma{}'.format(day)})
-        
-        df = pd.merge(df, ma, on=['code', 'date'])
-    
-    return df 
-
     
 def db2df(years='2016', ktype='D', table='stocks'):
     """ reading data from db and return DataFrame object """
@@ -53,41 +39,73 @@ def db2df(years='2016', ktype='D', table='stocks'):
     return df      
 
 
+def add_MAs(df, *args):
+    ''' add moving average to dataframe '''
+    
+    print 'Adding columns to dataframe...',
+    
+    df0 = df.set_index('date').sort_index()
+    
+    for day in args:
+        ma = df0.groupby('code')['close'].rolling(day).mean()\
+             .reset_index().rename(columns={'close':'ma{}'.format(day)})
+        
+        df = pd.merge(df, ma, on=['code', 'date'])
+  
+    c_max = df0.groupby('code')['close'].expanding().max()\
+            .reset_index().rename(columns={'close':'c_max'})
+            
+    c_min = df0.groupby('code')['close'].expanding(center=True).min()\
+            .reset_index().rename(columns={'close':'c_min'})
+    
+    df = pd.merge(df, c_max, on=['code', 'date'])
+    df = pd.merge(df, c_min, on=['code', 'date'])
+
+    print 'Done.'
+    
+    return df 
+    
+
 def fun1(s):
     """ apply function """
+    
     kwargs = {}
-    cnt = s.code.count()
+    pct_coff = 100/s.code.count() #to percentage
     # p change
     for i in [0.1, 7]:
-        k1 = 'pc_a{:.0f}'.format(i)
-        k2 = 'pc_b{:.0f}'.format(i)
-        kwargs[k1] = (np.where(s['p_change']>=i, 1.0, 0).sum() / cnt) * 100
-        kwargs[k2] = (np.where(s['p_change']<=-i, 1.0, 0).sum() / cnt) * 100     
+        k1 = 'pc_A{:.0f}'.format(i)
+        k2 = 'pc_B{:.0f}'.format(i)
+        kwargs[k1] = np.where(s['p_change']>=i, 1.0, 0).sum() * pct_coff
+        kwargs[k2] = np.where(s['p_change']<=-i, 1.0, 0).sum() * pct_coff   
 
     # ma trends
     mas_c = [5, 10, 20, 30, 60]
     f = lambda x: 'ma{}'.format(x)
 
     for ma in mas_c[::2]:
-        k1 = 'ma_a{:02d}'.format(ma) #above
-        k2 = 'ma_b{:02d}'.format(ma) #below        
-        kwargs[k1] = (np.where(s['close']>=s[f(ma)], 1.0, 0).sum() / cnt) * 100        
-        kwargs[k2] = (np.where(s['close']<s[f(ma)], 1.0, 0).sum() / cnt) * 100    
+        k1 = 'ma_A{:02d}'.format(ma) #above
+        k2 = 'ma_B{:02d}'.format(ma) #below        
+        kwargs[k1] = np.where(s['close']>=s[f(ma)], 1.0, 0).sum() * pct_coff        
+        kwargs[k2] = np.where(s['close']<s[f(ma)], 1.0, 0).sum() * pct_coff   
     
     for i in [5, 20]:
         idx = mas_c.index(i)
         _mas = zip(mas_c[idx:], mas_c[idx+1:])
-        k1 = 'ma_u{:02d}'.format(i) #up trend
-        k2 = 'ma_d{:02d}'.format(i) #down trend 
+        k1 = 'ma_U{:02d}'.format(i) #up trend
+        k2 = 'ma_D{:02d}'.format(i) #down trend 
         c1 = reduce(lambda m,n: m&n, map(lambda (x,y):s[f(x)]>=s[f(y)], _mas))
         c2 = reduce(lambda m,n: m&n, map(lambda (x,y):s[f(x)]<s[f(y)], _mas)) 
-        kwargs[k1] = (np.where(c1, 1.0, 0).sum() / cnt) * 100
-        kwargs[k2] = (np.where(c2, 1.0, 0).sum() / cnt) * 100     
+        kwargs[k1] = np.where(c1, 1.0, 0).sum() * pct_coff
+        kwargs[k2] = np.where(c2, 1.0, 0).sum() * pct_coff     
 
     # close, amplitude, volumn
     kwargs['avg_c'] =  np.multiply(s['close'], s['volume']).sum() / s['volume'].sum()
     kwargs['avg_a'] = (((s['high']-s['low']) / s['low']).mean()) * 100
     kwargs['avg_v'] = s['volume'].mean()          
+ 
+    #above expanding_max, below expanding_min
+    kwargs['c_max'] = np.where(s['close']>=s['c_max'], 1.0, 0).sum() #/ cnt) * 100
+    kwargs['c_min'] = np.where(s['close']<=s['c_min'], 1.0, 0).sum() #/ cnt) * 100
     
     ser = pd.Series(data=kwargs.values(), index=kwargs.keys()).sort_index()
     
@@ -105,8 +123,10 @@ def stat(years='2016', w=None):
     dfstks = db2df(years)
     dfstks = add_MAs(dfstks, 30, 60)
 
-    df = dfstks.groupby('date').apply(fun1)
+    print 'Performing statistics...',
     
+    df = dfstks.groupby('date').apply(fun1)
+   
     if w:
         for colname in df.columns:
             if not colname.startswith('ma_'):
@@ -114,7 +134,9 @@ def stat(years='2016', w=None):
                 df.rename(columns={colname:'{}_{}'.format(colname, w)},inplace=True)
 
     df = pd.concat([dfidxs, df], axis=1, join_axes=[dfidxs.index]) #.sort_index(1)
-     
+
+    print 'Done.'
+    
     return df
 
     
@@ -127,7 +149,7 @@ def plot1(df, ref='sh'):
     #ref = next((x for x in colnames if x.startswith('zs_')))
     ref = 'zs_{}'.format(ref) 
     
-    for key in ['pc_a','pc_b','ma_a','ma_b','ma_u','ma_d','avg','zs']:
+    for key in ['pc_A','pc_B','ma_A','ma_B','ma_U','ma_D','avg_','c_','zs']:
         
         ks = filter(lambda x: x.startswith(key), colnames)
         if key != 'zs': 
