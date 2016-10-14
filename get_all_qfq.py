@@ -15,25 +15,28 @@ import time
 import os
 
 
-DATA_FOLDER = r'data\all'
+DATA_FOLDER = r'data'
 
 
 class Data_Fetcher(threading.Thread):
     
-    def __init__(self, q_code, q_data, lock, year, idx=False):
+    def __init__(self, q_code, q_data, lock, year):
         
         threading.Thread.__init__(self)
         self.q_code = q_code
         self.q_data = q_data
         self.lock = lock
         self.year = year
-        self.idx = idx
         self.start()
         
     def run(self):
         
-        start = '{}-01-01'.format(self.year)
-        end = '{}-12-31'.format(self.year)
+        if int(self.year)<=2004:
+            start = '2000-01-01'
+            end = '2004-12-31'
+        else:            
+            start = '{}-01-01'.format(self.year)
+            end = '{}-12-31'.format(self.year)
         
         with self.lock:
             print '{} has started...'.format(self.getName())
@@ -45,13 +48,14 @@ class Data_Fetcher(threading.Thread):
             else:
                 code = self.q_code.get()
                 if code:
+                    flg, stk = (True,code[:-4]) if code.endswith('_idx') else (False,code)
                     try:
                         df = ts.get_h_data(code=code, start=start, end=end, 
                                            autype='qfq', #qfq-前复权 hfq-后复权 None-不复权，默认为qfq
-                                           index=self.idx, #是否是大盘指数
+                                           index=flg, #是否是大盘指数
                                            drop_factor=False, #不移除复权因子
                                            retry_count=3,pause=3,)                                               
-                        df['code'] = [code, 'i_{}'.format(code)][self.idx] #add column 'code'                      
+                        df['code'] = code #add column 'code'                      
                         self.q_data.put(df)
                         msg = 'OK'
                         
@@ -88,7 +92,7 @@ def data_writer(db, q_data, lock):
                 if df is None: break
             
                 code = df.ix[0,'code']
-                table = 'stocks' if code.isdigit() else 'indexs'
+                table = 'indexs' if code.endswith('_idx') else 'stocks'
                 df.to_sql(table, conn, if_exists='append')  
                 msg = 'OK'
                 
@@ -107,8 +111,12 @@ def data_writer(db, q_data, lock):
 def main():
     ''' get history data for alll stocks and write it into database '''
     
-    year = raw_input('Year: ')
-    idx = raw_input('Index?: ') 
+    year = raw_input('Year=2016: ')
+    idx = raw_input('Index only?: ') 
+    if not year:
+        year = '2016'
+    if int(year)<=2004:
+        year = '2004'
         
     db = os.path.join(DATA_FOLDER, '{}.db'.format(year))    
     
@@ -122,14 +130,11 @@ def main():
     lock = threading.Lock() 
     
     df = pd.read_excel('codes.xls', converters={'code':str,'date':int})
+
+    codes = ts.get_index().code.add('_idx').tolist()
     
-    if idx:
-        codes = ts.get_index().code.tolist()
-        idx = True
-    else:
-        codes = df.code[df.date<=int(year)].tolist()
-        idx = False
- 
+    if not idx:
+        codes.extend(df.code[df.date<=int(year)].tolist())
         
     map(q_code.put, codes) #put stock codes and indexs into queue
     q_code.put(None) #end tag
@@ -137,16 +142,18 @@ def main():
     #fetch threads
     ths_f = []
     for x in xrange(n):
-        ths_f.append(Data_Fetcher(q_code, q_data, lock, year, idx))
+        ths_f.append(Data_Fetcher(q_code, q_data, lock, year))
         
     #write thread 
     #data_writer(db, q_data, lock)                                                
     th_w = threading.Thread(target=data_writer, args=(db, q_data, lock))
     th_w.start() 
-    
+
+    #waiting for fetch threads to exit    
     for th in ths_f:
         th.join()
-        
+    
+    #exit flag for write thread
     q_data.put(None)
     
     th_w.join()
