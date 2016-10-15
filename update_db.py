@@ -20,11 +20,12 @@ TODAY = datetime.date.today()
 MSG = '{t:10}: [{c:6}], [{d:24}], left: {l:4} ,Msg: {m:2}'
 
 class Data_Fetcher(threading.Thread):
-    def __init__(self, q_code, q_df, lock, **kwargs):
+    def __init__(self, q_code, q_df, lock, event, **kwargs):
         threading.Thread.__init__(self)
         self.q_code = q_code
         self.q_df = q_df
         self.lock = lock
+        self.event = event
         self.ktype = kwargs.setdefault('ktype', 'D')
         self.start()
         
@@ -35,10 +36,11 @@ class Data_Fetcher(threading.Thread):
         msg = ''
         while 1:
             if self.q_df.qsize() > 10:
-                time.sleep(10) #waitting 10s for db writer
+                self.event.wait(10) #time.sleep(10) #waitting 10s for db writer
             else:
                 code, startday = self.q_code.get()
-                if code:
+                
+                if code and not self.event.is_set():
                     endday = startday.replace(startday[5:],'12-31')
                     try:
                         df = ts.get_hist_data(code, start=startday,
@@ -162,7 +164,8 @@ def main():
     
     q_code = Queue.Queue()
     q_df = Queue.Queue()    
-    lock = threading.Lock() 
+    lock = threading.Lock()
+    event = threading.Event()
 
     codes_sday = get_codes_with_startday(year, db) 
     #put (code, startday) into queue     
@@ -171,13 +174,21 @@ def main():
 
     #fetch threads
     ths_f = []
+
     for x in xrange(n):
-        ths_f.append(Data_Fetcher(q_code, q_df, lock))
+        ths_f.append(Data_Fetcher(q_code, q_df, lock, event))
         
     #write thread                                                 
     th_w = threading.Thread(target=data_writer, args=(db, q_df, lock))
     th_w.start() 
 
+    try:
+        while 1:
+            time.sleep(.1)
+    except (KeyboardInterrupt, SystemExit):
+        print '#'*5,'Attempting to close threads'.upper(),'#'*5
+        event.set()
+        
     for th in ths_f: # waitting for all fetch threads to exit
         th.join()
     
