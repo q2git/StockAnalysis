@@ -152,11 +152,13 @@ def get_codes_with_startday(year, db):
 def main():
     ''' get history data for alll stocks and write it into database '''
     
-    year = raw_input('Year(default={}) : '.format(TODAY.year))
-    if not year.isdigit(): 
-        year = TODAY.year
+    year = raw_input('Year(=2016, 2015.2016) : '.format(TODAY.year))
+    year = year if year.isdigit() else TODAY.year
         
-    db = os.path.join(DATA_FOLDER, '{}_{}.db'.format(year, 'D'))    
+    ktype = raw_input('Kteyp(=D,W,M,5,15,30,60) :' ) 
+    ktype = ktype if ktype else 'D'
+        
+    db = os.path.join(DATA_FOLDER, '{}_{}.db'.format(year, ktype))    
      
     print 'Ready to update [{}]'.format(db) 
     n = raw_input('The number of threads (defalut=5): ') 
@@ -176,7 +178,7 @@ def main():
     ths_f = []
 
     for x in xrange(n):
-        ths_f.append(Data_Fetcher(q_code, q_df, lock, event))
+        ths_f.append(Data_Fetcher(q_code, q_df, lock, event, ktype=ktype))
         
     #write thread                                                 
     th_w = threading.Thread(target=data_writer, args=(db, q_df, lock))
