@@ -26,8 +26,6 @@ class Data_Fetcher(threading.Thread):
         self.q_df = q_df
         self.lock = lock
         self.ktype = kwargs.setdefault('ktype', 'D')
-        self.startday = kwargs.setdefault('start', None)
-        self.endday = kwargs.setdefault('end', None)
         self.start()
         
     def run(self):
@@ -39,29 +37,35 @@ class Data_Fetcher(threading.Thread):
             if self.q_df.qsize() > 10:
                 time.sleep(10) #waitting 10s for db writer
             else:
-                code = self.q_code.get()
+                code, startday = self.q_code.get()
                 if code:
+                    endday = startday.replace(startday[5:],'12-31')
                     try:
-                        df = ts.get_hist_data(code, start=self.startday,
-                                              end=self.endday,
+                        df = ts.get_hist_data(code, start=startday,
+                                              end=endday,
                                               ktype=self.ktype,
                                               retry_count=3, pause=3)
-                                              
-                        df['code'] = code #add column 'code'                      
-                        self.q_df.put(df)
-                        msg = 'OK'
+                        #in case of no data                      
+                        if isinstance(df, pd.DataFrame) and not df.empty: 
+                            df['code'] = code #add column 'code'                         
+                            self.q_df.put(df)
+                            msg = 'OK'
+                        else:
+                            msg = 'No Data'
+                            
                     except Exception as e:
                         msg = 'NG'
                         with open('error.txt','a') as f: #error records
                             f.write('Fetcher:{}, {}\n'.format(code, e))                         
                         
                     with self.lock:
-                        print '{:10}: [{:6}], left: {:4}, Msg: {}'.format(self.getName(), 
-                                code, self.q_code.qsize(), msg)        
+                        print '{:10}: [{:6}], [{:10} to {:10}], left: {:4}, Msg: {}'\
+                                .format(self.getName(), code, startday, 
+                                        endday, self.q_code.qsize(), msg)        
                        
                         
                 else:
-                    self.q_code.put(None) #for other threads to exit
+                    self.q_code.put((None, None)) #for other threads to exit
                     break  
 
         with self.lock:
@@ -99,50 +103,74 @@ def data_writer(db, q_df, lock):
 
 
 
-def get_code_list():
-    #codes = ts.get_stock_basics().index.tolist() #stock codes 
-    #codes = ['600596','000009','300331','000001','000002'] 
-    codes = ts.get_today_all().code.tolist()
+def get_codes_with_startday(year, db):
+    ''' return [(code, startday),...] '''
+    
+    # code list with time to market
+    df = ts.get_stock_basics()['timeToMarket'] / 10000 # convert to year
+    df = df[(df<=(int(year)+1)) & (df>0) ]
+
+    codes = df.index.tolist()
+    #codes = ['600596','000009','300331','000001','000002']     
     codes.extend(['sh','sz','hs300','sz50','zxb','cyb',]) #index codes
 
-    return codes
+    # last update date
+    try:
+        with sqlite3.connect(db) as con:
+            sql = 'select code,max(date) as lastupdate from stocks group by code'
+            df = pd.read_sql(sql ,con, index_col='code')
+        df = df['lastupdate']     
+        df = pd.to_datetime(df)+pd.DateOffset(1) #add 1 day
+        df = df.apply(lambda x:str(x.date())) #to date string
+       
+    except Exception as e:
+        print '{}, use an empty DataFrame instead.'.format(e)
+        df = pd.DataFrame()
+    
+    default_startday = '{}-01-01'.format(year)    
+    f = lambda x: df.get(x, default_startday)
+    codes_sday = ((c,f(c)) for c in codes if f(c)!=str(TODAY)) 
+    
+    return codes_sday
     
 
            
 def main():
     ''' get history data for alll stocks and write it into database '''
     
-    #year = raw_input('Year: ')
-    #if not year.isdigit(): 
-    year = TODAY.year
+    year = raw_input('Year(default={}) : '.format(TODAY.year))
+    if not year.isdigit(): 
+        year = TODAY.year
         
     db = os.path.join(DATA_FOLDER, '{}_{}.db'.format(year, 'D'))    
-    
-    with sqlite3.connect(db) as conn:
-        rs = conn.execute('select date from indexs order by date desc').fetchone()
-    
-    t = pd.to_datetime(rs[0]) + pd.DateOffset(1) #add 1 day
-    start = str(t.date())
-    
-    print 'Ready to update [{}], start day: [{}]'.format(db, start) 
+     
+    print 'Ready to update [{}]'.format(db) 
     n = raw_input('The number of threads (defalut=5): ') 
     n = int(n) if n.isdigit() else 5
     
     q_code = Queue.Queue()
     q_df = Queue.Queue()    
     lock = threading.Lock() 
-    
-    codes = get_code_list()    
-    map(q_code.put, codes) #put stock codes and indexs into queue
-    q_code.put(None) #end tag
+
+    codes_sday = get_codes_with_startday(year, db) 
+    #put (code, startday) into queue     
+    map(q_code.put, codes_sday) 
+    q_code.put((None, None)) #end tag for fetch threads
 
     #fetch threads
+    ths_f = []
     for x in xrange(n):
-        Data_Fetcher(q_code, q_df, lock, start=start)
+        ths_f.append(Data_Fetcher(q_code, q_df, lock))
         
     #write thread                                                 
     th_w = threading.Thread(target=data_writer, args=(db, q_df, lock))
     th_w.start() 
+
+    for th in ths_f: # waitting for all fetch threads to exit
+        th.join()
+    
+    q_df.put(None) # for writer thread to exit
+    
     th_w.join()
     
     print 'All tasks have completed!'
