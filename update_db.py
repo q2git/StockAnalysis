@@ -104,6 +104,7 @@ def data_writer(db, q_df, lock):
 
 def get_codes_with_startday(year, db):
     ''' return ((code, startday),...) '''
+    year = int(year)
     
     try: # code list with time to market
         df = ts.get_stock_basics()
@@ -117,7 +118,7 @@ def get_codes_with_startday(year, db):
         df.index = map(lambda x:'{:06d}'.format(x), df.index) 
         
     df = df['timeToMarket'] / 10000 # convert to year        
-    df = df[(df<=(int(year)+1)) & (df>0) ]
+    df = df[(df<=(year+1)) & (df>0) ]
 
     codes = df.index.tolist()
     #codes = ['600596','000009','300331','000001','000002']     
@@ -139,7 +140,8 @@ def get_codes_with_startday(year, db):
     
     default_startday = '{}-01-01'.format(year)    
     f = lambda x: df.get(x, default_startday)
-    codes_sday = ((c,f(c)) for c in codes if f(c)!=str(TODAY)) 
+    codes_sday = ((c,f(c)) for c in codes if f(c)!=str(TODAY) \
+                  and int(f(c)[:4])==year)
 
     return codes_sday
     
