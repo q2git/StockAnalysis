@@ -17,7 +17,7 @@ import os
 
 DATA_FOLDER = r'data\all'
 TODAY = datetime.date.today()
-
+MSG = '{t:10}: [{c:6}], [{d:24}], left: {l:4} ,Msg: {m:2}'
 
 class Data_Fetcher(threading.Thread):
     def __init__(self, q_code, q_df, lock, **kwargs):
@@ -59,9 +59,8 @@ class Data_Fetcher(threading.Thread):
                             f.write('Fetcher:{}, {}\n'.format(code, e))                         
                         
                     with self.lock:
-                        print '{:10}: [{:6}], [{:10} to {:10}], left: {:4}, Msg: {}'\
-                                .format(self.getName(), code, startday, 
-                                        endday, self.q_code.qsize(), msg)        
+                        print MSG.format(t=self.getName(), c=code, m=msg, 
+                            d=startday+' to '+endday, l=self.q_code.qsize())        
                        
                         
                 else:
@@ -96,18 +95,28 @@ def data_writer(db, q_df, lock):
                     f.write('Writer:{}, {}\n'.format(code, e))  
                     
             with lock:
-                print '{:10}: [{:6}], left: {:4} ,Msg: {:2}, DB:{}'\
-                        .format('Writer', code, q_df.qsize(), msg, db)            
+                print MSG.format(t='Writer', c=code, d=db, 
+                                 l=q_df.qsize(), m=msg,)            
             
     print 'Writer has stopped.'
 
 
 
 def get_codes_with_startday(year, db):
-    ''' return [(code, startday),...] '''
+    ''' return ((code, startday),...) '''
     
-    # code list with time to market
-    df = ts.get_stock_basics()['timeToMarket'] / 10000 # convert to year
+    try: # code list with time to market
+        df = ts.get_stock_basics()
+        cols = ['name','industry','area']
+        df[cols] = df[cols].applymap(lambda x: x.decode('utf8'))
+        df.to_excel('codes.xlsx')  
+        
+    except Exception as e:
+        print '{}, use codes.xlsx instead.'.format(e) 
+        df = pd.read_excel('codes.xlsx', index_col='code', parse_cols='A,P',)
+        df.index = map(lambda x:'{:06d}'.format(x), df.index) 
+        
+    df = df['timeToMarket'] / 10000 # convert to year        
     df = df[(df<=(int(year)+1)) & (df>0) ]
 
     codes = df.index.tolist()
@@ -119,18 +128,19 @@ def get_codes_with_startday(year, db):
         with sqlite3.connect(db) as con:
             sql = 'select code,max(date) as lastupdate from stocks group by code'
             df = pd.read_sql(sql ,con, index_col='code')
+            
         df = df['lastupdate']     
         df = pd.to_datetime(df)+pd.DateOffset(1) #add 1 day
         df = df.apply(lambda x:str(x.date())) #to date string
        
     except Exception as e:
-        print '{}, use an empty DataFrame instead.'.format(e)
+        print '{}, use empty DataFrame instead.'.format(e)
         df = pd.DataFrame()
     
     default_startday = '{}-01-01'.format(year)    
     f = lambda x: df.get(x, default_startday)
     codes_sday = ((c,f(c)) for c in codes if f(c)!=str(TODAY)) 
-    
+
     return codes_sday
     
 
@@ -178,5 +188,7 @@ def main():
 
    
 if __name__ == '__main__':
+    t1 = time.time()
     main()
-    raw_input('END.') #press any key to exit
+    t = (time.time()-t1) / 60
+    raw_input('Elapsed time: {} minutes.'.format(t))#press any key to exit
