@@ -12,10 +12,15 @@ import threading
 import Queue
 import time
 import os
-import commons as cm
+from commons import TODAY, DATA_DIR, DB_BASIC
+
+
+MSG = '{t:10}: [{c:6}], [{d:24}], left: {l:4} ,Msg: {m:2}'
 
 
 class Data_Fetcher(threading.Thread):
+    """ fetching hist data """
+    
     def __init__(self, q_code, q_df, lock, event, **kwargs):
         threading.Thread.__init__(self)
         self.q_code = q_code
@@ -37,7 +42,7 @@ class Data_Fetcher(threading.Thread):
                 code, startday = self.q_code.get()
                 
                 if code and not self.event.is_set():
-                    endday = startday.replace(startday[5:],'12-31')
+                    endday = startday.replace(startday[4:],'-12-31')
                     try:
                         df = ts.get_hist_data(code, start=startday,
                                               end=endday,
@@ -57,7 +62,7 @@ class Data_Fetcher(threading.Thread):
                             f.write('Fetcher:{}, {}\n'.format(code, e))                         
                         
                     with self.lock:
-                        print cm.MSG.format(t=self.getName(), c=code, m=msg, 
+                        print MSG.format(t=self.getName(), c=code, m=msg, 
                             d=startday+' to '+endday, l=self.q_code.qsize())                     
                         
                 else:
@@ -67,11 +72,10 @@ class Data_Fetcher(threading.Thread):
         with self.lock:
             print '{} has stopped.'.format(self.getName())
 
-
  
 def data_writer(db, q_df, lock):
-    ''' write data to database ''' 
-	#TBD: writer cannot exit
+    """ write data to database """
+
     print 'Writer has started...' 
     with sqlite3.connect(db) as conn:
         conn.text_factory = str
@@ -92,35 +96,25 @@ def data_writer(db, q_df, lock):
                     f.write('Writer:{}, {}\n'.format(code, e))  
                     
             with lock:
-                print cm.MSG.format(t='Writer', c=code, d=db[-24:], 
+                print MSG.format(t='Writer', c=code, d=db[-24:], 
                                  l=q_df.qsize(), m=msg,)            
             
     print 'Writer has stopped.'
 
 
-
 def get_codes_with_startday(year, db):
-    ''' return ((code, startday),...) '''
-    year = int(year)
+    """ return ((code, startday),...) """
     
-    try: # code list with time to market
-        df = ts.get_stock_basics()
-        cols = ['name','industry','area']
-        df[cols] = df[cols].applymap(lambda x: x.decode('utf8'))
-        df.to_excel(os.path.join(cm.DATA_DIR, 'codes.xlsx'))  
-        
-    except Exception as e:
-        print '{}, use codes.xlsx instead.'.format(e) 
-        df = pd.read_excel('codes.xlsx', index_col='code', parse_cols='A,P',)
-        df.index = map(lambda x:'{:06d}'.format(x), df.index) 
+    year = int(year)
+    #code list
+    with sqlite3.connect(DB_BASIC) as con:
+        df = pd.read_sql('select code,timeToMarket from codes', con, index_col='code')
         
     df = df['timeToMarket'] / 10000 # convert to year        
     df = df[(df<=(year+1)) & (df>0) ]
-
-    codes = df.index.tolist()
-    #codes = ['600596','000009','300331','000001','000002']     
-    codes.extend(['sh','sz','hs300','sz50','zxb','cyb',]) #index codes
-
+  
+    codes = ['sh','sz','hs300','sz50','zxb','cyb']#index codes
+    codes.extend( df.index.tolist() ) 
     # last update date
     try:
         with sqlite3.connect(db) as con:
@@ -136,29 +130,50 @@ def get_codes_with_startday(year, db):
         print '{}, use empty DataFrame instead.'.format(e)
         df = pd.DataFrame()
     
-    default_startday = '{}-01-01'.format(year)    
+    default_startday = '{:4d}-01-01'.format(year)    
     f = lambda x: df.get(x, default_startday)
-    codes_sday = ((c,f(c)) for c in codes if f(c)!=str(cm.TODAY) \
+    codes_sday = ((c,f(c)) for c in codes if f(c)!=str(TODAY) \
                   and int(f(c)[:4])==year)
 
-    return codes_sday
-    
+    return codes_sday    
 
-           
-def main():
-    ''' get history data for alll stocks and write it into database '''
     
-    year = raw_input('Year(=2016, 2015.2016) : '.format(cm.TODAY.year))
-    year = year if year.isdigit() else cm.TODAY.year
-        
-    ktype = raw_input('Kteyp(=D,W,M,5,15,30,60) :' ) 
-    ktype = ktype if ktype else 'D'
-        
-    db = os.path.join(cm.DATA_DIR, '{}_{}.db'.format(year, ktype))    
+def update_basics():
+    """ update basic data """
+    
+    basics = {
+                'codes':ts.get_stock_basics, #股票列表
+                'industry':ts.get_industry_classified, #行业分类
+                'concept':ts.get_concept_classified, #概念分类
+                'area':ts.get_area_classified, #地域分类
+                'sme':ts.get_sme_classified, #中小板分类
+                'gem':ts.get_gem_classified, #创业板分类
+                'st':ts.get_st_classified, #风险警示板分类
+                'hs300':ts.get_hs300s, #沪深300成份及权重
+                'sz50':ts.get_sz50s, #上证50成份股
+                'zz500':ts.get_zz500s, #中证500成份股 
+              }
+              
+    print '\nUpdating [{}]...'.format(DB_BASIC)
+      
+    with sqlite3.connect(DB_BASIC) as con:
+        con.text_factory = str      
+        for table, func in basics.items():
+            try:
+                df = func()
+                df.to_sql(table, con, if_exists='replace')
+            except Exception as e:
+                print table,':-->',e
+            
+    print 'Done.'
+             
+           
+def update_codes(year, ktype, n):
+    """ update stock data """
+  
+    db = os.path.join(DATA_DIR, '{}_{}.db'.format(year, ktype))    
      
-    print 'Ready to update [{}]'.format(db) 
-    n = raw_input('The number of threads (defalut=5): ') 
-    n = int(n) if n.isdigit() else 5
+    print '\nUpdating [{}]'.format(db) 
     
     q_code = Queue.Queue()
     q_df = Queue.Queue()    
@@ -187,6 +202,7 @@ def main():
             else:
                 time.sleep(.1)
     except (KeyboardInterrupt, SystemExit):
+        print '\n'
         print '#'*5,'Attempting to close threads'.upper(),'#'*5
         event.set()
         
@@ -197,10 +213,28 @@ def main():
     
     th_w.join()
     
-    print 'All tasks have completed!'
+    print 'All tasks have been completed!'
  
 
-   
+def main():
+    year = raw_input('Year? [{}]/(y1.y2...) : '.format(TODAY.year))
+    year = year if year else str(TODAY.year)
+        
+    ktype = raw_input('Kteyp? [D]/W/M/5/15/30/60/(k1.k2...) :' ) 
+    ktype = ktype.upper() if ktype else 'D'
+
+    n = raw_input('Threads number? [5] : ') 
+    n = int(n) if n.isdigit() else 5
+
+    if raw_input('Update basics.db? Y/[N] : '):    
+        update_basics()
+    
+    for y in year.split('.'):
+        for k in ktype.split('.'):
+            print '\n','#'*10,y,k,n,'#'*10,'\n'
+            update_codes(y, k, n)
+
+    
 if __name__ == '__main__':
     t1 = time.time()
     main()
