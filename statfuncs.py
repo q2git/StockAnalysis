@@ -27,11 +27,11 @@ def db2df(years='2016', ktype='D', table='stocks'):
         yield df      
 
 
-def add_Cols(df, ma_days=[30,60], rmxx_days=[30,60]):
+def add_Cols(df, ma_days=[30,60], rmxx_days=[60]):
     """ add columns moving average and rolling-max/min to dataframe 
     usage: df = add_MAs_RMs(df, mas=[30,60], rms=[30,90]) """
     
-    print 'Adding columns to dataframe...',
+    print 'Adding columns ma{} rmxx{} to dataframe...'.format(ma_days,rmxx_days),
    
     df0 = df.set_index('date').sort_index()
     
@@ -60,9 +60,9 @@ def stat_daily(s):
     """ apply function for daily """
     
     kwargs = {}
-    pct_coff = 100.0/s.code.count() #to percentage
+    pct_coff = 1 #100.0/s.code.count() #to percentage
     # p change
-    p_changes=[1,3,5,7,9]
+    p_changes=[1,5,9]
     for i in p_changes:
         k1 = 'p_change > +{:.0f}%'.format(i)
         k2 = 'p_change < -{:.0f}%'.format(i)
@@ -129,8 +129,9 @@ def stat(years='2016',  w=None, add_mas=[30,60], add_rmxxs=[30,90]):
                 df.rename(columns={colname:'{}_w{}'.format(colname, w)},inplace=True)
 
     df = pd.concat([dfi, df], axis=1, join_axes=[dfi.index]) #.sort_index(1)
-    df.to_excel(os.path.join(STAT_DIR, 'stat_{}_daily.xlsx'.format(years)))     
-    df.index = pd.to_datetime(df.index, format="%Y-%m-%d") #.to_period(freq='D')
+    df.to_excel(os.path.join(STAT_DIR, 'stat_{}_daily.xlsx'.format(years))) 
+    
+    #df.index = pd.to_datetime(df.index, format="%Y-%m-%d") #.to_period(freq='D')
     #df.index = pd.to_datetime(df.index).to_period(freq='D')    
     print 'Done.'
     

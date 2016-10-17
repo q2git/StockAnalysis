@@ -7,6 +7,7 @@ Created on Sat Oct 15 10:49:28 2016
 
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import numpy as np
 import os
 from commons import TODAY, PLOT_DIR
 
@@ -134,18 +135,31 @@ if __name__ == '__main__':
     if not years: years='2016'
     
     idx = raw_input('Index(=sh,sz,hs300,sz50,zxb,cyb): ')
-    if not idx: idx='sh'
+    idx = 'idx_{}'.format(idx) if idx else 'idx_sh'
     
     w = raw_input('Window size(=None): ')
     if w: w=int(w)
     
     from statfuncs import stat
     df = stat(years, w)
-    figs1 = plot_pair(df)
-    figs2 = plot_line(df)
-    save_fig(**figs1)
-    save_fig(**figs2)
-    #plot1(df, idx)
- 
-    if raw_input('Show plot?: '):
-        plt.show()     
+    #cols = df.columns.groupby(df.columns.str.slice(0,1))
+    cols = df.columns.sort_values().tolist()
+    
+    for i, col in enumerate(cols): #show columns
+        print '{:<3}: {} '.format(i, col)
+    
+    while 1:
+        t = raw_input('please input col ids: ')
+        c = raw_input('Total records {}, choose=[0-{}]: '.format(len(df),len(df)))
+        c = c.split('-') if c else [0,len(df)-1]
+        if t:
+            cs = map(lambda x: cols[int(x)], t.split('.'))
+            cs.append(idx)
+            dfp = df.ix[int(c[0]):int(c[1]), cs]
+            dfp.plot(subplots=True, marker='.', 
+                    xticks=np.arange(0, len(dfp), (len(dfp)/60)+1), )
+            plt.show() 
+        else:
+            break
+    
+    raw_input('END')

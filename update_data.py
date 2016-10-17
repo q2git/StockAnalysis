@@ -57,13 +57,14 @@ class Data_Fetcher(threading.Thread):
                             msg = 'No Data'
                             
                     except Exception as e:
-                        msg = 'NG'
-                        with open('error.txt','a') as f: #error records
-                            f.write('Fetcher:{}, {}\n'.format(code, e))                         
+                        msg = '{}'.format(e)                       
                         
                     with self.lock:
                         print MSG.format(t=self.getName(), c=code, m=msg, 
-                            d=startday+' to '+endday, l=self.q_code.qsize())                     
+                            d=startday+' to '+endday, l=self.q_code.qsize())                                             
+                        if msg != 'OK':
+                            with open('error.txt','a') as f: #error records
+                                f.write('Fetcher:{}, {}\n'.format(code, msg))                          
                         
                 else:
                     self.q_code.put((None, None)) #for other threads to exit
@@ -231,9 +232,12 @@ def main():
     
     for y in year.split('.'):
         for k in ktype.split('.'):
-            print '\n','#'*10,y,k,n,'#'*10,'\n'
+            print '\n{} Year={}, Ktype={}, Threads={} {}\n'\
+                    .format('#'*10,y,k,n,'#'*10)
             update_codes(y, k, n)
-
+    
+    df = ts.get_today_all() #just for record
+    df.to_excel(os.path.join(DATA_DIR, 'today_all_{}.xlsx'.format(TODAY)))
     
 if __name__ == '__main__':
     t1 = time.time()
