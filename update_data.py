@@ -133,7 +133,7 @@ def get_codes_with_startday(year, db):
     
     default_startday = '{:4d}-01-01'.format(year)    
     f = lambda x: df.get(x, default_startday)
-    codes_sday = ((c,f(c)) for c in codes if f(c)!=str(TODAY) \
+    codes_sday = ((c,f(c)) for c in codes if f(c)<=str(TODAY) \
                   and int(f(c)[:4])==year)
 
     return codes_sday    
@@ -236,6 +236,7 @@ def main():
                     .format('#'*10,y,k,n,'#'*10)
             update_codes(y, k, n)
     
+    print 'Get today all and save it into excel.'
     df = ts.get_today_all() #just for record
     df.to_excel(os.path.join(DATA_DIR, 'today_all_{}.xlsx'.format(TODAY)))
     

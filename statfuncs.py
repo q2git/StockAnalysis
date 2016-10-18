@@ -22,12 +22,13 @@ def db2df(years='2016', ktype='D', table='stocks'):
             sql = 'select * from {}'.format(table)  #stocks or indexs 
             print 'Reading table [{}] from [{}] ...'.format(table, db), 
             df = pd.read_sql(sql, con)
+            df.drop_duplicates(inplace=True)
             print 'Done.'
     
         yield df      
 
 
-def add_Cols(df, ma_days=[30,60], rmxx_days=[60]):
+def add_cols(df, ma_days=[30,60], rmxx_days=[60]):
     """ add columns moving average and rolling-max/min to dataframe 
     usage: df = add_MAs_RMs(df, mas=[30,60], rms=[30,90]) """
     
@@ -60,7 +61,7 @@ def stat_daily(s):
     """ apply function for daily """
     
     kwargs = {}
-    pct_coff = 1 #100.0/s.code.count() #to percentage
+    pct_coff = 100.0/s.code.count() #to percentage
     # p change
     p_changes=[1,5,9]
     for i in p_changes:
@@ -107,18 +108,35 @@ def stat_daily(s):
     return ser                    
                      
                      
-def stat(years='2016',  w=None, add_mas=[30,60], add_rmxxs=[30,90]):
+def stat(years='2016', ktype='D', w=None, add_mas=[30,60], 
+         add_rmxxs=[30,90], que=None):
     """ statistic analysis """
-    
+    if que is not None:
+        que.put((0,'Loading indexs data...'))
+        
     # indexs
-    dfi = pd.concat(db2df(years, table='indexs'), ignore_index=True)
+    dfi = pd.concat(db2df(years, ktype, table='indexs'), ignore_index=True)
     dfi = dfi.groupby(['code','date'])['close'].max().unstack(0)
     dfi.rename(columns=lambda x:'idx_{}'.format(x), inplace=True)   
+
+    if que is not None:
+        que.put((0,'done.\n'))         
+        que.put((0,'Loading stocks data...')) 
+        
+    df = pd.concat(db2df(years, ktype), ignore_index=True)
     
-    df = pd.concat(db2df(years), ignore_index=True)
-    df = add_Cols(df, add_mas, add_rmxxs)
+    if que is not None:
+        que.put((0,'done.\n'))         
+        que.put((0,'Adding columns ma{} rmxx{} to dataframe...'\
+                 .format(add_mas,add_rmxxs))) 
+        
+    df = add_cols(df, add_mas, add_rmxxs)
     
-    print 'Performing statistics...',
+    if que is not None:
+        que.put((0,'done.\n'))        
+        que.put((0,'Performing statistics...'))
+    else:
+        print 'Performing statistics...',
     
     df = df.groupby('date').apply(stat_daily) # statistical analysis
    
@@ -133,9 +151,12 @@ def stat(years='2016',  w=None, add_mas=[30,60], add_rmxxs=[30,90]):
     
     #df.index = pd.to_datetime(df.index, format="%Y-%m-%d") #.to_period(freq='D')
     #df.index = pd.to_datetime(df.index).to_period(freq='D')    
-    print 'Done.'
-    
-    return df       
+    if que is not None:
+        que.put((0,'done.\n'))
+        que.put((1,df))
+    else:
+        print 'Done.'
+        return df       
     
     
 if __name__ == '__main__':
