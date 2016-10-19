@@ -162,7 +162,8 @@ def update_basics():
         for table, func in basics.items():
             try:
                 df = func()
-                df.to_sql(table, con, if_exists='replace')
+                if isinstance(df, pd.DataFrame):
+                    df.to_sql(table, con, if_exists='replace')
             except Exception as e:
                 print table,':-->',e
             

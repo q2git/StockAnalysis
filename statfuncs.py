@@ -30,7 +30,7 @@ def db2df(years='2016', ktype='D', table='stocks', que=None):
             df.drop_duplicates(inplace=True)
             
         if que is not None:
-            que.put((0,'Done.\n'))
+            que.put((0,'Done.\r\n'))
         else:
             print 'Done.' 
     
@@ -66,7 +66,7 @@ def add_cols(df, ma_days=[30,60], rmxx_days=[60], que=None):
         df = pd.merge(df, c_min, on=['code', 'date'])
 
     if que is not None:
-        que.put((0,'Done.\n'))
+        que.put((0,'Done.\r\n'))
     else:
         print 'Done.' 
     
@@ -98,8 +98,8 @@ def stat_daily(s):
         _mas = mas[i:]
         _mas.insert(0,'close')
         cmp_pairs = zip(_mas[i:], _mas[i+1:])
-        k1 = 'trend: ' + '>'.join(_mas) #up trend (close>=ma5>=10>=20...)
-        k2 = 'trend: ' +'<'.join(_mas) #down trend (close<ma5<10<20...)
+        k1 = 'trend: ' + '>'.join(_mas[:2]) #up trend (close>=ma5>=10>=20...)
+        k2 = 'trend: ' +'<'.join(_mas[:2]) #down trend (close<ma5<10<20...)
         c1 = reduce(lambda m,n: m&n, map(lambda (x,y):s[x]>=s[y], cmp_pairs))
         c2 = reduce(lambda m,n: m&n, map(lambda (x,y):s[x]<s[y], cmp_pairs)) 
         kwargs[k1] = np.where(c1, 1.0, 0).sum() * pct_coff
@@ -116,7 +116,7 @@ def stat_daily(s):
 
     # close, swing, volumn
     kwargs['avg: close'] =  np.multiply(s['close'], s['volume']).sum() / s['volume'].sum()
-    kwargs['avg: swing'] = ((s['high']-s['low']) / s['low']).mean()
+    kwargs['avg: swing'] = ((s['high']-s['low']) / s['low']).mean() * 100
     kwargs['avg: volume'] = s['volume'].mean()          
      
     ser = pd.Series(data=kwargs.values(), index=kwargs.keys()).sort_index()
@@ -161,7 +161,7 @@ def stat(dfi, dfc, w=None, k=None, que=None):
     df = pd.concat([dfi, dfc], axis=1, join_axes=[dfi.index]) #.sort_index(1)
     
     if que is not None:
-        que.put((0,'Done.\n'))
+        que.put((0,'Done.\r\n'))
         que.put((1,df))
     else:
         print 'Done.'

@@ -27,8 +27,8 @@ class Gui(TkFactory):
         #bind_all
         self.bind_all('<Control-KeyPress-q>', self.stop)
         self.bt_load.config(command= self.load_data) #       
-        self.bt2.config(command= self.send2ref)  
-        self.bt3.config(command= self.showfigs)
+        self.bt_s2ref.config(command= self.send2ref)  
+        self.bt_show.config(command= self.showfigs)
         self.bt_stat.config(command= self.stat_data)        
         self.list1.bind('<Double-1>', self.add2plot)
         self.list1.bind('<3>', self.send2plot) 
@@ -52,6 +52,7 @@ class Gui(TkFactory):
                 self.stat_data()
             else:
                 self.txt1.insert('end', data)
+                self.txt1.see('end')
                 self.after(1000, self.check_que)                
         except Queue.Empty:
             self.txt1.insert('end', '.') 
@@ -81,7 +82,7 @@ class Gui(TkFactory):
         self.after(1000, self.check_que) 
          
     def setbydf(self):
-        self.bt1.var.set('Load & Stat & Plot')        
+        self.bt_load.var.set('Load & Stat')        
         days = self.df.index.tolist() 
         self.startday.config(values=days)
         self.startday.var.set(days[0])
