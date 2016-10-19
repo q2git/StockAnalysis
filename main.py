@@ -26,7 +26,7 @@ class Gui(TkFactory):
     def config_cmd(self):
         #bind_all
         self.bind_all('<Control-KeyPress-q>', self.stop)
-        self.bt1.config(command= self.load_stat)        
+        self.bt_load.config(command= self.load_data) #       
         self.bt2.config(command= self.send2ref)  
         self.bt3.config(command= self.showfigs)
         self.bt_stat.config(command= self.stat_data)        
@@ -59,8 +59,8 @@ class Gui(TkFactory):
         #else:
             #self.after(1000, self.check_que)
         
-    def load_stat(self):
-        self.bt1.var.set('Loading...')
+    def load_data(self):
+        self.bt_load.var.set('Loading...')
         try:
             years = self.years.var.get()
             ktype = self.ktype.var.get()
