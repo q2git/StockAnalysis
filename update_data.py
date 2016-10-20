@@ -11,9 +11,15 @@ import sqlite3
 import threading
 import Queue
 import time
+import datetime
 import os
-from commons import TODAY, DATA_DIR, DB_BASIC
 
+
+TODAY = datetime.date.today()
+DATA_DIR =  'data'
+if not os.path.exists(DATA_DIR):
+    os.mkdir(DATA_DIR) 
+DB_BASIC = os.path.join(DATA_DIR, 'basics.db') 
 
 MSG = '{t:10}: [{c:6}], [{d:24}], left: {l:4} ,Msg: {m:2}'
 

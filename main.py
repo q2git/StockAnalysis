@@ -65,8 +65,8 @@ class Gui(TkFactory):
         try:
             years = self.years.var.get()
             ktype = self.ktype.var.get()
-            mas = map(lambda x: int(x), self.mas.get().split(','))
-            rmxx = map(lambda x: int(x), self.rmxx.get().split(','))
+            mas = self.mas.get().split(',')
+            rmxx = self.rmxx.get().split(',')
             #self.df = stat(years, ktype, window, mas, rmxx)
             threading.Thread(target=s.df_idxs_codes, args=(years, ktype, 
                                 mas, rmxx, self.que)).start()

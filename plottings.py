@@ -8,17 +8,22 @@ Created on Sat Oct 15 10:49:28 2016
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import numpy as np
+import datetime
 import os
-from commons import TODAY, PLOT_DIR
 
 
+TODAY = datetime.date.today()
+PLOT_DIR =  'plot'
+if not os.path.exists(PLOT_DIR):
+    os.mkdir(PLOT_DIR)
+
+    
 def save_fig(**kwargs):
     
     for k, fig in kwargs.items():
         fig.set_size_inches(16, 9) 
         fn = '{}_{}'.format(TODAY, k)               
-        fig.savefig(os.path.join(PLOT_DIR, fn), dpi=200)     
- 
+        fig.savefig(os.path.join(PLOT_DIR, fn), dpi=200)      
 
    
 def plot_pair(df, ref='sh'):

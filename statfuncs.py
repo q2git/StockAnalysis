@@ -8,9 +8,15 @@ import pandas as pd
 import numpy as np
 import sqlite3
 import os
-from commons import DATA_DIR, STAT_DIR
 
-    
+
+DATA_DIR =  'data'
+STAT_DIR =  'stat'
+for folder in [DATA_DIR, STAT_DIR]:
+    if not os.path.exists(folder):
+        os.mkdir(folder) 
+        
+        
 def db2df(years='2016', ktype='D', table='stocks', que=None):
     """ reading data from db and return a generator """
     
@@ -50,16 +56,16 @@ def add_cols(df, ma_days=[30,60], rmxx_days=[60], que=None):
     df0 = df.set_index('date').sort_index()
     
     for day in ma_days:
-        ma = df0.groupby('code')['close'].rolling(day).mean()\
+        ma = df0.groupby('code')['close'].rolling(int(day)).mean()\
              .reset_index().rename(columns={'close':'ma{}'.format(day)})
         
         df = pd.merge(df, ma, on=['code', 'date'])
         
     for day in rmxx_days:
-        c_max = df0.groupby('code')['close'].rolling(day).max()\
+        c_max = df0.groupby('code')['close'].rolling(int(day)).max()\
                 .reset_index().rename(columns={'close':'rmax{}'.format(day)})
                 
-        c_min = df0.groupby('code')['close'].rolling(day).min()\
+        c_min = df0.groupby('code')['close'].rolling(int(day)).min()\
                 .reset_index().rename(columns={'close':'rmin{}'.format(day)})
     
         df = pd.merge(df, c_max, on=['code', 'date'])
@@ -114,12 +120,19 @@ def stat_daily(s):
         kwargs[k1] = np.where(s['close']==s[rmax], 1.0, 0).sum() * pct_coff
         kwargs[k2] = np.where(s['close']==s[rmin], 1.0, 0).sum() * pct_coff
 
+    v_mas = s.columns.str.extract('(^v_ma\d+)', expand=False).dropna().tolist() #extract v_ma
+    v_mas.sort(key=lambda x: int(x[4:])) 
+    # ma trends
+    for v_ma in v_mas:
+        k1 = 'volume: >{}'.format(v_ma) #above      
+        kwargs[k1] = np.where(s['volume']>=s[v_ma], 1.0, 0).sum() * pct_coff  
+
     # close, swing, volumn
     kwargs['avg: close'] =  np.multiply(s['close'], s['volume']).sum() / s['volume'].sum()
-    kwargs['avg: swing'] = ((s['high']-s['low']) / s['low']).mean() * 100
+    #kwargs['avg: swing'] = ((s['high']-s['low']) / s['low']).mean() * 100
     kwargs['avg: volume'] = s['volume'].mean()          
-    kwargs['swing: <5%'] = np.where(((s['high']-s['low'])/s['low'])<0.05, 1.0, 0).sum() * pct_coff
     kwargs['swing: >7%'] = np.where(((s['high']-s['low'])/s['low'])>0.07, 1.0, 0).sum() * pct_coff
+    kwargs['turnover: >10%'] = np.where(s['turnover']>10, 1.0, 0).sum() * pct_coff
   
     ser = pd.Series(data=kwargs.values(), index=kwargs.keys()).sort_index()
     

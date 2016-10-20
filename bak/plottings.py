@@ -7,12 +7,9 @@ Created on Sat Oct 15 10:49:28 2016
 
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-import datetime
+import numpy as np
 import os
-
-
-TODAY = datetime.date.today()
-STAT_FOLDER = r'data\stat'
+from commons import TODAY, PLOT_DIR
 
 
 def save_fig(**kwargs):
@@ -20,7 +17,7 @@ def save_fig(**kwargs):
     for k, fig in kwargs.items():
         fig.set_size_inches(16, 9) 
         fn = '{}_{}'.format(TODAY, k)               
-        fig.savefig(os.path.join(STAT_FOLDER, fn), dpi=200)     
+        fig.savefig(os.path.join(PLOT_DIR, fn), dpi=200)     
  
 
    
@@ -43,7 +40,7 @@ def plot_pair(df, ref='sh'):
             ks = [keys[0], keys[1], ref]
             
             df[ks].plot(kind='line', grid=True, subplots=False, legend=True, 
-                    rot=0, marker=None, ax=ax, secondary_y=[ref], color=['r','g','b'])
+                    rot=0, marker='.', ax=ax, secondary_y=[ref], color=['r','g','b'])
 
             ax.legend(loc='upper left', prop={'size':8},)          
             
@@ -64,3 +61,105 @@ def plot_pair(df, ref='sh'):
     
     return figs
 
+
+def plot_line(df, ref='sh'):
+    
+    print 'Preparing for figures...',
+    figs = {}
+    cols = df.columns.sort_values()
+    ref = 'idx_{}'.format(ref) 
+    prefixs = ['over_ma', 'avg', 'idx' ]
+
+    for prefix in prefixs:
+        ks = filter(lambda x: x.startswith(prefix), cols)        
+        if prefix!='idx':
+            ks.append(ref)
+        
+        axes = [df[ks].plot(kind='line', grid=True, subplots=False, legend=True, 
+                rot=0, marker='.', secondary_y=[ref],)]
+                           
+        axes[-1].tick_params(axis='x', which='minor', labelsize=8, )
+        axes[-1].tick_params(axis='x', which='major', pad=20, )  
+        axes[-1].xaxis.set_minor_locator(mdates.WeekdayLocator(interval=1))           
+        axes[-1].xaxis.set_minor_formatter(mdates.DateFormatter('%d'))
+        #axes[-1].xaxis.grid(True, which="minor") 
+        axes[-1].xaxis.set_major_locator(mdates.MonthLocator(interval=1))            
+        axes[-1].xaxis.set_major_formatter(mdates.DateFormatter('%b\n%Y'))           
+        plt.setp(axes[-1].xaxis.get_minorticklabels(), rotation=90) 
+        
+        fig = plt.gcf()
+        figs['{}'.format(prefix)] = fig
+    print 'Done.' 
+
+
+def plot1(df, ref='sh'):
+    
+    print 'Preparing for figures...',
+
+    colnames = df.columns
+    #ref = next((x for x in colnames if x.startswith('zs_')))
+    ref = 'idx_{}'.format(ref) 
+    
+    for key in ['pc','over_ma','trend','avg','roll','idx']:
+        
+        ks = filter(lambda x: x.startswith(key), colnames)
+        if key != 'idx': 
+            ks.append(ref)
+
+        axes = df[ks].plot(kind='line', grid=True, subplots=True, legend=False, 
+                           rot=0, marker='.',)
+
+        fig = plt.gcf() 
+
+        for ax in axes:
+            ax.legend(loc='upper left', prop={'size':8},) #, bbox_to_anchor=(1.0, 0.5))
+            ax.xaxis.set_minor_locator(mdates.WeekdayLocator(interval=1))           
+            ax.xaxis.set_minor_formatter(mdates.DateFormatter('%d'))
+            #ax.xaxis.grid(True, which="minor") 
+            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))            
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%b\n%Y'))  
+            ax.tick_params(axis='both', which='both', labelsize=8)
+
+        plt.tick_params(axis='x', which='minor', labelsize=6, )
+        plt.tick_params(axis='x', which='major', pad=20, )        
+        plt.setp(axes[-1].xaxis.get_minorticklabels(), rotation=90) 
+
+        fig.set_size_inches(16, 9) 
+
+    print 'Done.'    
+    
+    return fig
+    
+if __name__ == '__main__':
+    years = raw_input('Years(=2016, 2015.2016): ')
+    if not years: years='2016'
+    
+    idx = raw_input('Index(=sh,sz,hs300,sz50,zxb,cyb): ')
+    idx = 'idx_{}'.format(idx) if idx else 'idx_sh'
+    
+    w = raw_input('Window size(=None): ')
+    if w: w=int(w)
+    
+    from statfuncs import stat
+    df = stat(years, w)
+    #cols = df.columns.groupby(df.columns.str.slice(0,1))
+    cols = df.columns.sort_values().tolist()
+    
+    for i, col in enumerate(cols): #show columns
+        print '{:<3}: {} '.format(i, col)
+    
+    while 1:
+        t = raw_input('please input col ids: ')
+        c = raw_input('Total records {}, choose=[0-{}]: '.format(len(df),len(df)))
+        c = c.split('-') if c else [0,len(df)-1]
+        if t:
+            cs = map(lambda x: cols[int(x)], t.split('.'))
+            cs.append(idx)
+            dfp = df.ix[int(c[0]):int(c[1]), cs]
+            dfp.plot(subplots=True, marker='.', 
+                    xticks=np.arange(0, len(dfp), (len(dfp)/60)+1), )
+            plt.show() 
+        else:
+            break
+    
+    raw_input('END')
