@@ -5,7 +5,7 @@ Created on Tue Oct 18 10:56:55 2016
 """
 
 from tkfactory import TkFactory
-from statfuncs import stat, df_idxs_codes
+import statfuncs as s
 import numpy as np
 import matplotlib.pyplot as plt
 import threading
@@ -21,15 +21,15 @@ class Gui(TkFactory):
     def __init__(self, filename, master=None):
         TkFactory.__init__(self, filename, master)
         self.que = Queue.Queue()
-        self.config_cmd()
-        
-    def config_cmd(self):
         #bind_all
         self.bind_all('<Control-KeyPress-q>', self.stop)
-        self.bt_load.config(command= self.load_data) #       
+        self.bt_load.config(command= self.load_data) #  
+        
+    def config_cmd(self):     
         self.bt_s2ref.config(command= self.send2ref)  
         self.bt_show.config(command= self.showfigs)
-        self.bt_stat.config(command= self.stat_data)        
+        self.bt_stat.config(command= lambda: self.stat_data(True)) 
+        self.bt_excel.config(command= lambda: self.df.to_excel(self.fn.var.get()))
         self.list1.bind('<Double-1>', self.add2plot)
         self.list1.bind('<3>', self.send2plot) 
         self.list2.bind('<Double-1>', 
@@ -68,20 +68,25 @@ class Gui(TkFactory):
             mas = map(lambda x: int(x), self.mas.get().split(','))
             rmxx = map(lambda x: int(x), self.rmxx.get().split(','))
             #self.df = stat(years, ktype, window, mas, rmxx)
-            threading.Thread(target=df_idxs_codes, args=(years, ktype, 
+            threading.Thread(target=s.df_idxs_codes, args=(years, ktype, 
                                 mas, rmxx, self.que)).start()
             self.after(1000, self.check_que)
         except Exception as e:
             print e
 
-    def stat_data(self):
+    def stat_data(self, re_load=False):
+        if re_load: 
+            reload(s)
+        f = self.func.get()
         w = int(self.window.get())
         k = self.group.get()                
-        threading.Thread(target=stat, 
-                         args=(self.dfi, self.dfc, w, k, self.que)).start() # stat thread        
+        threading.Thread(target=s.stat, 
+                         args=(self.dfi, self.dfc, k, f, w, self.que)).start() # stat thread        
         self.after(1000, self.check_que) 
          
     def setbydf(self):
+        if not self.startday.get(): 
+            self.config_cmd() # bind all functions
         self.bt_load.var.set('Load & Stat')        
         days = self.df.index.tolist() 
         self.startday.config(values=days)
