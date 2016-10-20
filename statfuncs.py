@@ -84,7 +84,7 @@ def stat_daily(s):
         k1 = 'p_change: >+{:.0f}%'.format(i)
         k2 = 'p_change: <-{:.0f}%'.format(i)
         kwargs[k1] = np.where(s['p_change']>=i, 1.0, 0).sum() * pct_coff
-        kwargs[k2] = np.where(s['p_change']<=-i, 1.0, 0).sum() * pct_coff   
+        kwargs[k2] = np.where(s['p_change']<=-i, 1.0, 0).sum() * pct_coff  
 
     mas = s.columns.str.extract('(^ma\d+)', expand=False).dropna().tolist() #extract ma
     mas.sort(key=lambda x: int(x[2:])) 
@@ -118,7 +118,9 @@ def stat_daily(s):
     kwargs['avg: close'] =  np.multiply(s['close'], s['volume']).sum() / s['volume'].sum()
     kwargs['avg: swing'] = ((s['high']-s['low']) / s['low']).mean() * 100
     kwargs['avg: volume'] = s['volume'].mean()          
-     
+    kwargs['swing: <5%'] = np.where(((s['high']-s['low'])/s['low'])<0.05, 1.0, 0).sum() * pct_coff
+    kwargs['swing: >7%'] = np.where(((s['high']-s['low'])/s['low'])>0.07, 1.0, 0).sum() * pct_coff
+  
     ser = pd.Series(data=kwargs.values(), index=kwargs.keys()).sort_index()
     
     return ser                    
@@ -142,7 +144,7 @@ def df_idxs_codes(years='2016', ktype='D', add_mas=[30,60],
     return (dfi, dfc)
                          
                      
-def stat(dfi, dfc, w=None, k=None, que=None):
+def stat(dfi, dfc, k=None, f=None, w=None, que=None):
     """ statistic analysis """
     
     if que is not None:     
@@ -150,22 +152,28 @@ def stat(dfi, dfc, w=None, k=None, que=None):
     else:
         print 'Performing statistics...',
     
-    dfc = dfc.groupby('date').apply(stat_daily) # statistical analysis
-   
-    if w and k:
-        for colname in dfc.columns:
-            if colname.startswith((k,)):
-                dfc[colname] = dfc[colname].rolling(window=w).mean()
-                dfc.rename(columns={colname:'{}_w{}'.format(colname, w)},inplace=True)
+    try:
+        dfc = dfc.groupby('date').apply(stat_daily) # statistical analysis
+    
+        dfc = pd.concat([dfi, dfc], axis=1, join_axes=[dfi.index]) #.sort_index(1)
+        
+        if k and f and w:
+            for n in dfc.columns:
+                if n.startswith((k,)):
+                    str_f = "dfc['{:s}'].rolling(window={:d}).{:s}()".format(n,w,f)
+                    dfc[n] = eval(str_f) #dfc[n].rolling(window=w).mean()
+                    dfc.rename(columns={n:'{}({}{})'.format(n,f,w)},inplace=True)
+        msg = 'Done.'
+    except Exception as e:
+        msg = e
 
-    df = pd.concat([dfi, dfc], axis=1, join_axes=[dfi.index]) #.sort_index(1)
     
     if que is not None:
-        que.put((0,'Done.\r\n'))
-        que.put((1,df))
+        que.put((0,'{}\n'.format(msg)))
+        que.put((1,dfc))
     else:
-        print 'Done.'
-        return df       
+        print  msg
+        return dfc       
     
     
 if __name__ == '__main__':
