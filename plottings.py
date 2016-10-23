@@ -17,6 +17,11 @@ PLOT_DIR =  'plot'
 if not os.path.exists(PLOT_DIR):
     os.mkdir(PLOT_DIR)
 
+_KWARGS = { #defalut kwargs
+    'line':{'kind':'line','subplots':True,'x_compat':True,'marker':'.'},
+    'bar':{'kind':'bar',},
+    'area':{'kind':'area',},
+    }
     
 def save_fig(**kwargs):
     
@@ -25,76 +30,91 @@ def save_fig(**kwargs):
         fn = '{}_{}'.format(TODAY, k)               
         fig.savefig(os.path.join(PLOT_DIR, fn), dpi=200)      
 
-   
-def plot_pair(df, ref='sh'):
-    
-    print 'Preparing for figures...',
-    figs = {}
-    cols = df.columns.sort_values()
-    ref = 'idx_{}'.format(ref) 
-    prefixs = [ 'trend', 'pc', 'roll',] #paired params 
-                #'over_ma', 'avg', 'idx' ]
-
-    keys_group = map(lambda y:filter(lambda x: x.startswith(y), cols,),prefixs)
-    
-    for ks in keys_group:
-        pairs = zip(ks[:len(ks)/2], ks[len(ks)/2:])
-        fig, axes = plt.subplots(nrows=len(pairs), sharex=True)
         
-        for keys, ax in zip(pairs,axes):
-            ks = [keys[0], keys[1], ref]
+def showfig(df, ptype='line', params={}): 
+    ptypes = {'line': line_plot,
+              'bar': bar_plot,
+              'area': area_plot,
+              }
+              
+    msg = ptypes.get(ptype)(df, params) 
+    return msg
+        
+        
+def bar_plot(df, params={}):
+    try:
+        kwargs = {'kind':'bar', 'stacked':True, 'grid':True, 'subplots':False,}
+        kwargs2 = {'kind':'line', 'grid':True, 'rot':45, 'marker':'.',
+                  'subplots':False, 'legend':False, 
+                  'xticks':np.arange(0, len(df), (len(df)/50)+1) }
+        if df.columns.size==3:
+            kwargs.update({'color':['r','g']})
+        kwargs.update(params) # update user kwargs
+
+        nrows = df.columns.size if kwargs.get('subplots',False) else 2
+
+        fig, axes = plt.subplots(nrows=nrows, sharex=True)
+        ax = axes[0] if nrows==2 else axes[:-1]
+        df.ix[:,:-1].plot(ax=ax,**kwargs)
+        df.ix[:,-1].plot(ax=axes[-1], **kwargs2)
+        
+        for ax in axes:
+            ax.legend(loc='upper left', prop={'size':10},)
             
-            df[ks].plot(kind='line', grid=True, subplots=False, legend=True, 
-                    rot=0, marker='.', ax=ax, secondary_y=[ref], color=['r','g','b'])
+        plt.show()
+        return repr(kwargs)
+    except Exception as e:
+        return 'plot_bar: {}\n'.format(e)          
 
-            ax.legend(loc='upper left', prop={'size':8},)          
+        
+def area_plot(df, params={}):
+    try:
+        kwargs = {'kind':'area', 'stacked':False, 'grid':True, }
+        kwargs2 = {'kind':'line', 'grid':True, 'rot':45, 'marker':'.',
+                  'subplots':False, 'legend':False, 
+                  'xticks':np.arange(0, len(df), (len(df)/50)+1) }
+        if df.columns.size==3:
+            kwargs.update({'color':['r','g']})
+        kwargs.update(params) # update user kwargs
+
+        fig, axes = plt.subplots(nrows=2, sharex=True)
+        
+        df.ix[:,:-1].plot(ax=axes[0],**kwargs)
+        df.ix[:,-1].plot(ax=axes[-1], **kwargs2)
+        
+        for ax in axes:
+            ax.legend(loc='upper left', prop={'size':10},)
             
-        #df[ref].plot(kind='line', grid=True, subplots=False, legend=True, 
-        #                   rot=0, marker='.', ax=axes[-1], )
-                           
-        axes[-1].tick_params(axis='x', which='minor', labelsize=8, )
-        axes[-1].tick_params(axis='x', which='major', pad=20, )  
-        axes[-1].xaxis.set_minor_locator(mdates.WeekdayLocator(interval=1))           
-        axes[-1].xaxis.set_minor_formatter(mdates.DateFormatter('%d'))
-        #axes[-1].xaxis.grid(True, which="minor") 
-        axes[-1].xaxis.set_major_locator(mdates.MonthLocator(interval=1))            
-        axes[-1].xaxis.set_major_formatter(mdates.DateFormatter('%b\n%Y'))           
-        plt.setp(axes[-1].xaxis.get_minorticklabels(), rotation=90) 
-        
-        figs['{}'.format(keys)] = fig
-    print 'Done.' 
-    
-    return figs
+        plt.show() 
+        return repr(kwargs)
+    except Exception as e:
+        return 'plot_area: {}\n'.format(e)            
 
 
-def plot_line(df, ref='sh'):
-    
-    print 'Preparing for figures...',
-    figs = {}
-    cols = df.columns.sort_values()
-    ref = 'idx_{}'.format(ref) 
-    prefixs = ['over_ma', 'avg', 'idx' ]
+def line_plot(df, params={}):
+    try:
+        kwargs = {'kind':'line', 'grid':True, 'subplots':False,}
+        kwargs2 = {'kind':'line', 'grid':True, 'rot':45, 'marker':'.',
+                  'subplots':False, 'legend':False, 
+                  'xticks':np.arange(0, len(df), (len(df)/50)+1) }
+        if df.columns.size==3:
+            kwargs.update({'color':['r','g']})
+        kwargs.update(params) # update user kwargs
+        
+        nrows = df.columns.size if kwargs.get('subplots',False) else 2
 
-    for prefix in prefixs:
-        ks = filter(lambda x: x.startswith(prefix), cols)        
-        if prefix!='idx':
-            ks.append(ref)
+        fig, axes = plt.subplots(nrows=nrows, sharex=True)
+        ax = axes[0] if nrows==2 else axes[:-1]
+        df.ix[:,:-1].plot(ax=ax,**kwargs)
+        df.ix[:,-1].plot(ax=axes[-1], **kwargs2)
         
-        axes = [df[ks].plot(kind='line', grid=True, subplots=False, legend=True, 
-                rot=0, marker='.', secondary_y=[ref],)]
-                           
-        axes[-1].tick_params(axis='x', which='minor', labelsize=8, )
-        axes[-1].tick_params(axis='x', which='major', pad=20, )  
-        axes[-1].xaxis.set_minor_locator(mdates.WeekdayLocator(interval=1))           
-        axes[-1].xaxis.set_minor_formatter(mdates.DateFormatter('%d'))
-        #axes[-1].xaxis.grid(True, which="minor") 
-        axes[-1].xaxis.set_major_locator(mdates.MonthLocator(interval=1))            
-        axes[-1].xaxis.set_major_formatter(mdates.DateFormatter('%b\n%Y'))           
-        plt.setp(axes[-1].xaxis.get_minorticklabels(), rotation=90) 
-        
-        fig = plt.gcf()
-        figs['{}'.format(prefix)] = fig
-    print 'Done.' 
+        for ax in axes:
+            ax.legend(loc='upper left', prop={'size':10},)
+            
+        plt.show()
+        return repr(kwargs)
+    except Exception as e:
+        return 'plot_line: {}\n'.format(e)  
 
 
 def plot1(df, ref='sh'):

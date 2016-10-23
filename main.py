@@ -6,16 +6,10 @@ Created on Tue Oct 18 10:56:55 2016
 
 from tkfactory import TkFactory
 import statfuncs as s
-import numpy as np
-import matplotlib.pyplot as plt
+import plottings as p
 import threading
 import Queue
 
-_KWARGS = { #defalut kwargs
-    'line':{'kind':'line','subplots':True,'x_compat':True,'marker':'.'},
-    'bar':{'kind':'bar',},
-    'area':{'kind':'area',},
-    }
             
 class Gui(TkFactory):
     def __init__(self, filename, master=None):
@@ -26,8 +20,8 @@ class Gui(TkFactory):
         self.bt_load.config(command= self.load_data) #  
         
     def config_cmd(self):     
-        self.bt_s2ref.config(command= self.send2ref)  
-        self.bt_show.config(command= self.showfigs)
+        self.bt_s2ref.config(command= self.add2ref)  
+        self.bt_show.config(command= lambda: self.showfig(self.ptype.var.get()))
         self.bt_stat.config(command= lambda: self.stat_data(True)) 
         self.bt_excel.config(command= lambda: self.df.to_excel(self.fn.var.get()))
         self.list1.bind('<Double-1>', self.add2plot)
@@ -36,12 +30,11 @@ class Gui(TkFactory):
                         lambda _:self.list2.delete(self.list2.curselection()[0]))
         self.group1.bind("<<ComboboxSelected>>", self.setlist1)        
         self.startday.bind("<<ComboboxSelected>>", self.set_enddays)
-        self.bt_bar.config(command= lambda: self.showfigs('bar'))
-        self.bt_area.config(command= lambda: self.showfigs('area'))
-        self.kwargs.insert('1.0', '{   }')
-        self.kwargs.insert('end', '\n\n'+'\n\n'.join(map(repr, _KWARGS.values())))
-        
+        self.bt_show1.config(command= lambda: self.showfig('bar'))
+        self.bt_area.config(command= lambda: self.showfig('area'))
+       
     def check_que(self):
+        self.txt1.see('end')         
         try:
             flag, data = self.que.get_nowait()
             if flag==1:
@@ -52,8 +45,7 @@ class Gui(TkFactory):
                 self.stat_data()
             else:
                 self.txt1.insert('end', data)
-                self.txt1.see('end')
-                self.after(1000, self.check_que)                
+                self.after(1000, self.check_que)               
         except Queue.Empty:
             self.txt1.insert('end', '.') 
             self.after(1000, self.check_que)
@@ -66,10 +58,10 @@ class Gui(TkFactory):
             years = self.years.var.get()
             ktype = self.ktype.var.get()
             mas = self.mas.get().split(',')
-            rmxx = self.rmxx.get().split(',')
+            #rmxx = self.rmxx.get().split(',')
             #self.df = stat(years, ktype, window, mas, rmxx)
             threading.Thread(target=s.df_idxs_codes, args=(years, ktype, 
-                                mas, rmxx, self.que)).start()
+                                mas, self.que)).start()
             self.after(1000, self.check_que)
         except Exception as e:
             print e
@@ -115,12 +107,12 @@ class Gui(TkFactory):
         idx = self.list1.curselection()[0]
         self.list2.insert('end', self.list1.get(idx))
         
-    def send2ref(self, event=None):
+    def add2ref(self, event=None):
         idx = self.list1.curselection()[0]
         val = self.list1.get(idx)
         self.ref.var.set(val)
 
-    def get_plot_df(self):
+    def get_df4plot(self):
         cols = list(eval(self.list2.listvar.get()))
         ref = self.ref.var.get()
         if ref:
@@ -128,18 +120,16 @@ class Gui(TkFactory):
         df = self.df.ix[self.startday.get():self.endday.get(), cols]
         return df
             
-    def showfigs(self, ptype='line'):
-        df = self.get_plot_df()        
-        kwargs = {'grid':True, }
-        if ptype in ['line', 'bar', 'area']:
-            kwargs.update({'xticks':np.arange(0, len(df), (len(df)/60)+1)})
-        kwargs.update( _KWARGS.get(ptype, {}) )
-        kwargs.update(eval(self.kwargs.get('1.0','1.end'))) # update user kwargs
-        try:
-            df.plot(**kwargs)          
-        except Exception as e:
-            self.txt1.insert('end', '{}\n'.format(e))  
-        plt.show() 
+    def showfig(self, ptype='line'):
+        reload(p)
+        df = self.get_df4plot()        
+        params = eval(self.params.var.get())         
+        msg = p.showfig(df, ptype, params)
+        if msg.startswith('plot'):          
+            self.txt1.insert('end', msg)
+        else:
+            self.kwargs.delete('1.0', 'end')
+            self.kwargs.insert('end', msg)
 
     def set_enddays(self, event):
         try:
