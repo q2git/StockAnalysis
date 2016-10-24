@@ -34,6 +34,9 @@ def db2df(years='2016', ktype='D', table='stocks', que=None):
             sql = 'select * from {}'.format(table)  #stocks or indexs 
             df = pd.read_sql(sql, con)
             df.drop_duplicates(inplace=True)
+        # remove 00:00:00
+        if ktype=='QFQ':
+            df['date'] = df['date'].str.slice(0,10)
         # convert to float32 for saving memory cost    
         cols = df.columns.tolist()
         cols.remove('date')

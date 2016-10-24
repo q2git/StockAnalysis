@@ -77,9 +77,11 @@ def area_plot(df, params={}):
             kwargs.update({'color':['r','g']})
         kwargs.update(params) # update user kwargs
 
-        fig, axes = plt.subplots(nrows=2, sharex=True)
-        
-        df.ix[:,:-1].plot(ax=axes[0],**kwargs)
+        nrows = df.columns.size if kwargs.get('subplots',False) else 2
+
+        fig, axes = plt.subplots(nrows=nrows, sharex=True)
+        ax = axes[0] if nrows==2 else axes[:-1]
+        df.ix[:,:-1].plot(ax=ax,**kwargs)
         df.ix[:,-1].plot(ax=axes[-1], **kwargs2)
         
         for ax in axes:
