@@ -17,7 +17,8 @@ class Gui(TkFactory):
         self.que = Queue.Queue()
         #bind_all
         self.bind_all('<Control-KeyPress-q>', self.stop)
-        self.bt_load.config(command= self.load_data) #  
+        self.bt_loadstat.config(command= self.loadstat) #  
+        self.ktype.bind("<<ComboboxSelected>>", self.set_mas) 
         
     def config_cmd(self):     
         self.bt_s2ref.config(command= self.add2ref)  
@@ -29,7 +30,7 @@ class Gui(TkFactory):
         self.list2.bind('<Double-1>', 
                         lambda _:self.list2.delete(self.list2.curselection()[0]))
         self.group1.bind("<<ComboboxSelected>>", self.setlist1)        
-        self.startday.bind("<<ComboboxSelected>>", self.set_enddays)
+        self.startday.bind("<<ComboboxSelected>>", self.set_enddays)       
         self.bt_show1.config(command= lambda: self.showfig('bar'))
         self.bt_area.config(command= lambda: self.showfig('area'))
        
@@ -52,8 +53,8 @@ class Gui(TkFactory):
         #else:
             #self.after(1000, self.check_que)
         
-    def load_data(self):
-        self.bt_load.var.set('Loading...')
+    def loadstat(self):
+        self.bt_loadstat.var.set('Loading...')
         try:
             years = self.years.var.get()
             ktype = self.ktype.var.get()
@@ -79,7 +80,7 @@ class Gui(TkFactory):
     def setbydf(self):
         if not self.startday.get(): 
             self.config_cmd() # bind all functions
-        self.bt_load.var.set('Load & Stat')        
+        self.bt_loadstat.var.set('Load & Stat')        
         days = self.df.index.tolist() 
         self.startday.config(values=days)
         self.startday.var.set(days[0])
@@ -140,6 +141,12 @@ class Gui(TkFactory):
         except Exception as e:
             print e
 
+    def set_mas(self, event):
+        ktype = self.ktype.var.get()
+        if ktype=='QFQ':
+            self.mas.var.set('5,10,20,30,60')
+        else:
+            self.mas.var.set('30,60')
      
     def run(self):
         self.mainloop()           
