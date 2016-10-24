@@ -76,7 +76,7 @@ def add_cols(df, ma_days=[30,60], que=None):
         
             df = pd.merge(df, c_max, on=['code', 'date'])
             #df = pd.merge(df, c_min, on=['code', 'date'])
-        '''   
+        '''     
         msg = 'Done.'    
     except Exception as e:
         msg = '{}'.format(e)
@@ -96,12 +96,15 @@ def stat_daily(s):
     pct_coff = 100.0/s.code.count() #to percentage
     
     # p change
-    p_changes=[1,5,9]
+    if 'p_change' in s.columns:
+        p_changes=[1,5,9]
+    else: # QFQ data has no p_change column
+        p_changes=[]
     for i in p_changes:
         k1 = 'p_change: >+{:.0f}%'.format(i)
         k2 = 'p_change: <-{:.0f}%'.format(i)
         kwargs[k1] = np.where(s['p_change']>=i, 1.0, 0).sum() * pct_coff
-        kwargs[k2] = np.where(s['p_change']<=-i, 1.0, 0).sum() * pct_coff  
+        kwargs[k2] = np.where(s['p_change']<=-i, 1.0, 0).sum() * pct_coff 
 
     # get column name maxx
     mas = s.columns.str.extract('(^ma\d+)', expand=False).dropna().tolist()
