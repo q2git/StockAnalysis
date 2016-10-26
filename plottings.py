@@ -58,8 +58,7 @@ def bar_plot(df, params={}):
         df.ix[:,:-1].plot(ax=ax,**kwargs)
         df.ix[:,-1].plot(ax=axes[-1], **kwargs2)
         
-        for ax in axes:
-            ax.legend(loc='upper left', prop={'size':10},)
+        set_tick_label(axes)
             
         plt.show()
         return repr(kwargs)
@@ -70,9 +69,9 @@ def bar_plot(df, params={}):
 def area_plot(df, params={}):
     try:
         kwargs = {'kind':'area', 'stacked':False, 'grid':True, }
-        kwargs2 = {'kind':'line', 'grid':True, 'rot':45, 'marker':'.',
+        kwargs2 = {'kind':'line', 'grid':True, 'rot':30, 'marker':'.',
                   'subplots':False, 'legend':False, 
-                  'xticks':np.arange(0, len(df), (len(df)/50)+1) }
+                  'xticks':np.arange(0, len(df), (len(df)/60)+1) }
         if df.columns.size==3:
             kwargs.update({'color':['r','g']})
         kwargs.update(params) # update user kwargs
@@ -84,8 +83,7 @@ def area_plot(df, params={}):
         df.ix[:,:-1].plot(ax=ax,**kwargs)
         df.ix[:,-1].plot(ax=axes[-1], **kwargs2)
         
-        for ax in axes:
-            ax.legend(loc='upper left', prop={'size':10},)
+        set_tick_label(axes)
             
         plt.show() 
         return repr(kwargs)
@@ -95,10 +93,10 @@ def area_plot(df, params={}):
 
 def line_plot(df, params={}):
     try:
-        kwargs = {'kind':'line', 'grid':True, 'subplots':False,}
+        kwargs = {'kind':'line', 'grid':True, 'subplots':True,}
         kwargs2 = {'kind':'line', 'grid':True, 'rot':45, 'marker':'.',
                   'subplots':False, 'legend':False, 
-                  'xticks':np.arange(0, len(df), (len(df)/50)+1) }
+                  'xticks':np.arange(0, len(df), (len(df)/30)+1) }
         if df.columns.size==3:
             kwargs.update({'color':['r','g']})
         kwargs.update(params) # update user kwargs
@@ -110,15 +108,26 @@ def line_plot(df, params={}):
         df.ix[:,:-1].plot(ax=ax,**kwargs)
         df.ix[:,-1].plot(ax=axes[-1], **kwargs2)
         
-        for ax in axes:
-            ax.legend(loc='upper left', prop={'size':10},)
+        set_tick_label(axes)
             
         plt.show()
         return repr(kwargs)
     except Exception as e:
         return 'plot_line: {}\n'.format(e)  
 
-
+        
+        
+def set_tick_label(axes):
+        axes[-1].tick_params(axis='x', which='both', labelsize=10)
+        
+        for tick in axes[-1].xaxis.get_majorticklabels():
+            tick.set_horizontalalignment("right")  
+            
+        for ax in axes:
+            ax.legend(loc='upper left', prop={'size':10},)    
+        
+    
+    
 def plot1(df, ref='sh'):
     
     print 'Preparing for figures...',

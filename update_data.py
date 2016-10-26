@@ -27,13 +27,13 @@ MSG = '{t:10}: [{c:6}], [{d:24}], left: {l:4} ,Msg: {m:2}'
 class Data_Fetcher(threading.Thread):
     """ fetching hist data """
     
-    def __init__(self, q_code, q_df, lock, event, **kwargs):
+    def __init__(self, q_code, q_df, lock, event, ktype):
         threading.Thread.__init__(self)
         self.q_code = q_code
         self.q_df = q_df
         self.lock = lock
         self.event = event
-        self.ktype = kwargs.setdefault('ktype', 'D')
+        self.ktype = ktype
         self.start()
         
     def run(self):
@@ -44,7 +44,7 @@ class Data_Fetcher(threading.Thread):
             msg = 'No Data'
             if self.event.is_set(): break
             try:
-                if self.q_df.qsize() > 10: 
+                if self.q_df.qsize() > 20: 
                     self.event.wait(10) #time.sleep(10) #waitting 10s for db writer 
                     continue
                 _code = self.q_code.get()
@@ -209,7 +209,7 @@ def update_codes(year, ktype, n):
     ths_f = []
 
     for x in xrange(n):
-        ths_f.append(Data_Fetcher(q_code, q_df, lock, event, ktype=ktype))
+        ths_f.append(Data_Fetcher(q_code, q_df, lock, event, ktype))
         
     #write thread                                                 
     th_w = threading.Thread(target=data_writer, args=(db, q_df, lock))
@@ -228,9 +228,12 @@ def update_codes(year, ktype, n):
     
     event.set()
     
-    for th in ths_f: # waitting for all fetch threads to exit
-        th.join()
-    print 'All fetch threads have stopped.'
+    if ktype=='QFQ': #fetch thread may dead for getting QFQ data
+        print 'Ignore fetch threads.'
+    else:
+        for th in ths_f: # waitting for all fetch threads to exit
+            th.join()
+        print 'All fetch threads have stopped.'
     
     q_df.put(None) # for writer thread to exit
     th_w.join()
@@ -241,7 +244,7 @@ def main():
     year = raw_input('Year? [{}]/(y1.y2...) : '.format(TODAY.year))
     year = year if year else str(TODAY.year)
         
-    ktype = raw_input('Kteyp? [D]/W/M/5/15/30/60/(k1.k2...)/q=QFQ :' ) 
+    ktype = raw_input('Ktype? [D]/W/M/5/15/30/60/(k1.k2...)/q=QFQ :' ) 
     if ktype.upper().startswith('Q'):
         ktype = 'QFQ'
     else:
