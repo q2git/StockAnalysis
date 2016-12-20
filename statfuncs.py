@@ -62,13 +62,19 @@ def add_cols(df, ma_days=[30,60], que=None):
         print msg,
         
     try:            
-        df0 = df.set_index('date').sort_index()
+        gb = df.set_index('date').sort_index().groupby('code')['close']
         
         for day in ma_days:
-            ma = df0.groupby('code')['close'].rolling(int(day)).mean()\
+            ma = gb.rolling(int(day)).mean()\
                  .reset_index().rename(columns={'close':'ma{}'.format(day)})
             
-            df = pd.merge(df, ma, on=['code', 'date'])
+            df = pd.merge(df, ma, how='left', on=['code', 'date'])
+        
+        if not 'p_change' in df.columns:
+            p_change = gb.pct_change().mul(100)\
+                 .reset_index().rename(columns={'close':'p_change'})
+            
+            df = pd.merge(df, p_change, how='left', on=['code', 'date'])            
         '''    
         for day in rmxx_days:
             c_max = df0.groupby('code')['close'].rolling(int(day)).max()\
@@ -99,10 +105,7 @@ def stat_daily(s):
     pct_coff = 100.0/s.code.count() #to percentage
     
     # p change
-    if 'p_change' in s.columns:
-        p_changes=[1,5,9]
-    else: # QFQ data has no p_change column
-        p_changes=[]
+    p_changes=[1,5,9]
     for i in p_changes:
         k1 = 'p_change: >+{:.0f}%'.format(i)
         k2 = 'p_change: <-{:.0f}%'.format(i)
@@ -154,9 +157,9 @@ def stat_daily(s):
     #    kwargs[k1] = np.where(s['volume']>=s[v_ma], 1.0, 0).sum() * pct_coff  
     '''
     # close, swing, volumn
-    kwargs['avg: close'] =  s['close'].mean()
-    kwargs['avg: swing'] = ((s['high']-s['low']) / s['low']).mean() * 100
-    kwargs['avg: volume'] = s['volume'].mean()  
+    #kwargs['avg: close'] =  s['close'].mean()
+    #kwargs['avg: swing'] = ((s['high']-s['low']) / s['low']).mean() * 100
+    #kwargs['avg: volume'] = s['volume'].mean()  
     #kwargs['avg: turnover'] = s['turnover'].mean() #(s['turnover'] * s['volume']).sum() / s['volume'].sum()       
     #kwargs['swing: >7%'] = np.where(((s['high']-s['low'])/s['low'])>0.07, 1.0, 0).sum() * pct_coff
   

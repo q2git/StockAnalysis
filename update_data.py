@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 Created on Mon Oct 10 09:18:12 2016
 
@@ -205,15 +205,15 @@ def update_codes(year, ktype, n):
     map(q_code.put, codes_sday) 
     q_code.put(None) #end tag for fetch threads
 
-    #fetch threads
-    ths_f = []
-
-    for x in xrange(n):
-        ths_f.append(Data_Fetcher(q_code, q_df, lock, event, ktype))
-        
     #write thread                                                 
     th_w = threading.Thread(target=data_writer, args=(db, q_df, lock))
     th_w.start() 
+
+    #fetch threads
+    ths_f = []    
+    for x in xrange(n):
+        ths_f.append(Data_Fetcher(q_code, q_df, lock, event, ktype))
+        time.sleep(3)   
 
     try:
         while 1:
@@ -229,7 +229,8 @@ def update_codes(year, ktype, n):
     event.set()
     
     if ktype=='QFQ': #fetch thread may dead for getting QFQ data
-        print 'Ignore fetch threads.'
+        print 'Waitting 60s, then ignore fetch threads.'
+        time.sleep(60)
     else:
         for th in ths_f: # waitting for all fetch threads to exit
             th.join()
@@ -263,9 +264,14 @@ def main():
             update_codes(y, k, n)
     
     print 'Get today all and save it into excel.'
-    df = ts.get_today_all() #just for record
-    df.to_excel(os.path.join(DATA_DIR, 'today_all_{}.xlsx'.format(TODAY)))
+    if raw_input('Get today all? Y/[N]'):
+        df = ts.get_today_all() #just for record
+        df.to_excel(os.path.join(DATA_DIR, 'today_all_{}.xlsx'.format(TODAY)))
     
+    if raw_input('Do it again? Y/[N]'):
+        main()
+
+        
 if __name__ == '__main__':
     t1 = time.time()
     main()
